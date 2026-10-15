@@ -9,9 +9,9 @@ from adaptive_gpu_orchestrator.benchmarks import NCCLBenchmark, parse_nccl_outpu
 from adaptive_gpu_orchestrator.doctor import Doctor
 from adaptive_gpu_orchestrator.profiling import ExperimentStore, WorkloadProfiler
 from adaptive_gpu_orchestrator.telemetry import (
+    NvidiaSMIProvider,
     NVMLProvider,
     NVMLUnavailable,
-    NvidiaSMIProvider,
 )
 
 
