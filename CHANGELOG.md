@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.6.0a0
+
+Workload Adapters milestone:
+
+- adapter protocol for native workload metrics
+- vLLM serving metrics adapter
+- distributed PyTorch training metrics adapter
+- adapted command canary runner
+- optimizer `--adapter generic|vllm|pytorch-distributed`
+- native TTFT / TPOT / ITL preservation
+- distributed communication / compute / phase timing preservation
+- adapter-specific metrics stored in `TrialMetrics.extras`
+- adapter metrics preserved through optimization persistence
+- deterministic parser, runner and CLI tests
+
 ## 0.5.0a0
 
 Guarded Validation milestone:

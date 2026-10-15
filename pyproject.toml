@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adaptive-gpu-orchestrator"
-version = "0.5.0a0"
-description = "Adaptive GPU Orchestrator for AI Workloads: topology-aware profiling, canary optimization, scheduler planning, and guarded promotion validation for GPU clusters."
+version = "0.6.0a0"
+description = "Adaptive GPU Orchestrator for AI Workloads: topology-aware profiling, native workload metric adapters, canary optimization, scheduler planning, and guarded validation."
 readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}

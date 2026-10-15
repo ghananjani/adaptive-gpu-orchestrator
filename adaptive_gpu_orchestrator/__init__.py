@@ -1,5 +1,10 @@
 """Adaptive GPU Orchestrator for AI Workloads."""
 
+from .adapters import (
+    AdaptedCommandCanaryRunner,
+    PyTorchDistributedMetricsAdapter,
+    VLLMMetricsAdapter,
+)
 from .controller import DeploymentPlan, DeploymentPlanner, DeploymentPolicy, SchedulerBackend
 from .doctor import Doctor
 from .models import ClusterSnapshot, DiagnosisReport, GPUDevice, TopologyLink
@@ -22,6 +27,7 @@ from .validation import (
 )
 
 __all__ = [
+    "AdaptedCommandCanaryRunner",
     "ClusterSnapshot",
     "ConfigurationOptimizer",
     "DeploymentPlan",
@@ -36,8 +42,10 @@ __all__ = [
     "OptimizationStore",
     "ParallelismConfig",
     "PlanDiff",
+    "PyTorchDistributedMetricsAdapter",
     "SchedulerBackend",
     "TopologyLink",
+    "VLLMMetricsAdapter",
     "ValidationDecision",
     "ValidationPolicy",
     "ValidationReport",
@@ -47,4 +55,4 @@ __all__ = [
     "diff_plans",
     "validate_trials",
 ]
-__version__ = "0.5.0a0"
+__version__ = "0.6.0a0"

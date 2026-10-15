@@ -1,14 +1,14 @@
 # Adaptive GPU Orchestrator for AI Workloads
 
-**An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, runs canary optimization, and renders safe deployment plans for GPU schedulers.
+**An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, normalizes native workload metrics, runs canary optimization, and renders safe deployment plans for GPU schedulers.
 
-> Status: **v0.5 pre-alpha — Guarded Validation.**
+> Status: **v0.6 pre-alpha — Workload Adapters.**
 
 ## Control loop
 
 **observe → diagnose → experiment → optimize → plan → validate → learn**
 
-The controller remains **recommend-only** in v0.4: it generates deployable artifacts but does not mutate Kubernetes or Slurm state.
+The controller remains recommend-only: it generates deployment artifacts and promotion decisions but does not mutate Kubernetes or Slurm state.
 
 ## Current capabilities
 
@@ -26,6 +26,15 @@ The controller remains **recommend-only** in v0.4: it generates deployable artif
 - persisted workload profiles
 - workload-level diagnosis
 
+### Workload Adapters
+- generic JSON benchmark contract
+- vLLM serving metrics normalization
+- PyTorch-distributed training metrics normalization
+- preservation of adapter-native metrics in `TrialMetrics.extras`
+- TTFT / TPOT / ITL retention for LLM serving
+- communication / compute / phase timing retention for distributed training
+- `agoctl optimize --adapter ...`
+
 ### Configuration Optimizer
 - TP/PP/DP + batch/concurrency search spaces
 - canary benchmarks
@@ -42,7 +51,6 @@ The controller remains **recommend-only** in v0.4: it generates deployable artif
 - Slurm script rendering
 - plans generated from either direct configs or saved optimizer winners
 - node selectors, Slurm partitions, node counts and GPU-per-node controls
-
 
 ### Guarded Validation
 - baseline-vs-candidate promotion checks
@@ -74,7 +82,9 @@ Profile:
 agoctl profile --name llama70b -- python serve.py
 ```
 
-Optimize:
+## Optimize native vLLM benchmark output
+
+Your benchmark command should print its final result as a JSON object on stdout.
 
 ```bash
 agoctl optimize \
@@ -82,8 +92,53 @@ agoctl optimize \
   --tp 1,2,4,8 \
   --pp 1,2 \
   --batch 1,2,4,8 \
+  --concurrency 1,8,32 \
+  --adapter vllm \
   --objective balanced \
+  --max-p99-ms 500 \
+  -- python benchmark_vllm.py
+```
+
+For vLLM, optimizer throughput prefers total-token throughput, then output-token throughput, then request throughput. Optimizer p99 latency prefers end-to-end p99 when available and otherwise uses p99 TTFT. Native TTFT, TPOT and ITL values remain in `TrialMetrics.extras`.
+
+## Optimize distributed PyTorch training
+
+```bash
+agoctl optimize \
+  --gpus 8 \
+  --tp 1,2,4,8 \
+  --dp 1,2,4 \
+  --adapter pytorch-distributed \
+  --objective throughput \
+  -- python distributed_benchmark.py
+```
+
+The PyTorch adapter accepts common summary keys such as `tokens_per_s`, `samples_per_s`, `p99_step_time_ms`, `communication_time_ms`, `compute_time_ms`, energy, GPU utilization and memory pressure. Phase timing fields are preserved for later analysis.
+
+See [`docs/workload-adapters.md`](docs/workload-adapters.md).
+
+## Generic optimizer contract
+
+The original generic JSON contract still works unchanged:
+
+```bash
+agoctl optimize \
+  --gpus 8 \
+  --tp 1,2,4,8 \
+  --adapter generic \
   -- python benchmark.py
+```
+
+Expected normalized fields include:
+
+```json
+{
+  "throughput_per_s": 14320,
+  "p99_latency_ms": 417,
+  "energy_joules": 4820,
+  "gpu_util_pct": 91.4,
+  "memory_pressure_pct": 87.2
+}
 ```
 
 ## Render a Slurm plan
@@ -100,7 +155,7 @@ agoctl plan \
   -- python train.py
 ```
 
-The output is a ready-to-review Slurm script. It is **not submitted automatically**.
+The output is a ready-to-review Slurm script. It is not submitted automatically.
 
 ## Render a Kubernetes plan
 
@@ -116,22 +171,7 @@ agoctl plan \
 
 The current Kubernetes renderer emits a single-pod `batch/v1 Job`; the target node therefore needs enough GPUs for the requested world size.
 
-## Plan from an optimizer winner
-
-```bash
-agoctl plan \
-  --backend slurm \
-  --available-gpus 8 \
-  --optimization <optimization-id> \
-  --nodes 1 \
-  --gpus-per-node 8 \
-  -- python benchmark_or_train.py
-```
-
-
 ## Validate an optimizer candidate before promotion
-
-Compare two saved optimizer winners:
 
 ```bash
 agoctl validate \
@@ -142,51 +182,19 @@ agoctl validate \
   --max-energy-regression 5
 ```
 
-A rejected candidate returns a nonzero exit code and records why promotion was blocked. By default, rejection also marks rollback as recommended for future mutating controller integrations.
-
-Inspect validation history:
-
-```bash
-agoctl validations list
-agoctl validations show <validation-id>
-```
-
-See [`docs/guarded-validation.md`](docs/guarded-validation.md).
+A rejected candidate returns a nonzero exit code and records why promotion was blocked.
 
 ## Safety model
 
-v0.4 intentionally stops before scheduler mutation:
+The project intentionally stops before scheduler mutation:
 
 - no `kubectl apply`
 - no Slurm submission
 - no automatic eviction or migration
-- no changes outside the generated plan
+- no changes outside generated artifacts
 - policy checks run before rendering
-- recommend-only state is included in the plan
-
-See [`docs/cluster-controller.md`](docs/cluster-controller.md).
-
-## Python API
-
-```python
-from adaptive_gpu_orchestrator import (
-    DeploymentPlanner,
-    DeploymentPolicy,
-    ParallelismConfig,
-    SchedulerBackend,
-)
-
-plan = DeploymentPlanner(
-    DeploymentPolicy(max_gpus=8, recommend_only=True)
-).plan(
-    config=ParallelismConfig(tensor_parallel=4, pipeline_parallel=2),
-    backend=SchedulerBackend.SLURM,
-    command=["python", "train.py"],
-    available_gpus=8,
-)
-
-print(plan.to_dict())
-```
+- validation gates run before future promotion
+- recommend-only state remains explicit
 
 ## Research directions
 
@@ -194,7 +202,8 @@ print(plan.to_dict())
 - adaptive TP/PP/DP selection
 - heterogeneous H100/H200 scheduling
 - KV-cache-aware resource allocation
-- SLO-aware energy optimization
+- TTFT / ITL / TPOT aware serving optimization
+- communication/computation overlap prediction
 - scheduler-aware canary validation
 - learned performance models that reduce search cost
 
@@ -216,6 +225,9 @@ Recommend-only Kubernetes/Slurm planning and deployment policy validation.
 
 ### v0.5 — Guarded Validation
 Promotion gates, audit reports, rollback recommendations and plan diffs.
+
+### v0.6 — Workload Adapters
+Native vLLM and distributed PyTorch metric normalization with preserved research metrics.
 
 ### v1.0 — Closed-loop Autopilot
 Guarded observe/diagnose/experiment/optimize/deploy/validate control loop.
