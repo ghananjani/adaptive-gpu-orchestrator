@@ -41,7 +41,13 @@ class ConfigurationOptimizer:
             for trial in trials
             if trial.feasible and trial.score is not None
         ]
-        best = max(feasible_scored, key=lambda trial: trial.score or float("-inf"), default=None)
+        best = max(
+            feasible_scored,
+            key=lambda trial: (
+                trial.score if trial.score is not None else float("-inf")
+            ),
+            default=None,
+        )
 
         baseline_trial = None
         if baseline is not None:
