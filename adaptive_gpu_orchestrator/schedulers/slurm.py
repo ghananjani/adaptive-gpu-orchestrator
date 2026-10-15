@@ -28,7 +28,6 @@ class SlurmRenderer:
 
         lines = [
             "#!/usr/bin/env bash",
-            "set -euo pipefail",
             f"#SBATCH --job-name={self.job_name}",
             f"#SBATCH --nodes={self.nodes}",
             f"#SBATCH --gpus-per-node={gpus_per_node}",
@@ -37,7 +36,7 @@ class SlurmRenderer:
         if self.partition:
             lines.append(f"#SBATCH --partition={self.partition}")
 
-        lines.append("")
+        lines.extend(["", "set -euo pipefail", ""])
         for key, value in sorted(plan.env.items()):
             lines.append(f"export {key}={shlex.quote(value)}")
 
