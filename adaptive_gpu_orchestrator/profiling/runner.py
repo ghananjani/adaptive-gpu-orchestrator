@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import subprocess
 import time
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Callable
 
 from adaptive_gpu_orchestrator.profiling.models import WorkloadProfile
 from adaptive_gpu_orchestrator.telemetry.providers import NvidiaSMIProvider, TelemetryProvider
