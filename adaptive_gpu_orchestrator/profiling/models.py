@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from statistics import mean
 from typing import Any
 from uuid import uuid4
 
@@ -14,9 +13,7 @@ class WorkloadProfile:
     name: str
     command: list[str] = field(default_factory=list)
     samples: list[TelemetrySample] = field(default_factory=list)
-    started_at: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
-    )
+    started_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     finished_at: str | None = None
     duration_s: float = 0.0
     exit_code: int | None = None
