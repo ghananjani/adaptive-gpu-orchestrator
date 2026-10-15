@@ -28,6 +28,11 @@ from adaptive_gpu_orchestrator.telemetry import (
     NVMLProvider,
     NVMLUnavailable,
 )
+from adaptive_gpu_orchestrator.validation import (
+    ValidationPolicy,
+    ValidationStore,
+    validate_trials,
+)
 
 
 def _print_json(data) -> None:
@@ -132,6 +137,28 @@ def _plain_optimization(result) -> None:
         print(f"  gpu_util={metrics.gpu_util_pct:.2f}%")
     if metrics.memory_pressure_pct is not None:
         print(f"  memory_pressure={metrics.memory_pressure_pct:.2f}%")
+
+
+def _plain_validation(report) -> None:
+    print(
+        f"Validation: {report.id}  decision={report.decision.value}  "
+        f"rollback_recommended={report.rollback_recommended}"
+    )
+    print(
+        f"Config: {report.baseline_config.label()} -> "
+        f"{report.candidate_config.label()}"
+    )
+    if report.deltas:
+        print("\nMetric deltas:")
+        for name, delta in sorted(report.deltas.items()):
+            print(
+                f"  - {name}: {delta.baseline:.3f} -> {delta.candidate:.3f} "
+                f"({delta.percent_change:+.3f}%)"
+            )
+    if report.reasons:
+        print("\nReasons:")
+        for reason in report.reasons:
+            print(f"  - {reason}")
 
 
 def _parse_tags(values: list[str]) -> dict[str, str]:
@@ -307,6 +334,33 @@ def build_parser() -> argparse.ArgumentParser:
         nargs=argparse.REMAINDER,
         help="workload command after --",
     )
+
+    validate = sub.add_parser(
+        "validate",
+        help="compare saved optimizer winners against promotion guardrails",
+    )
+    validate.add_argument("--baseline-optimization", required=True)
+    validate.add_argument("--candidate-optimization", required=True)
+    validate.add_argument("--optimization-store", default=".ago/optimizations")
+    validate.add_argument("--validation-store", default=".ago/validations")
+    validate.add_argument("--min-throughput-gain", type=float, default=0.0)
+    validate.add_argument("--max-p99-regression", type=float)
+    validate.add_argument("--max-energy-regression", type=float)
+    validate.add_argument("--max-memory-regression", type=float)
+    validate.add_argument("--no-rollback-on-reject", action="store_true")
+
+    validations = sub.add_parser(
+        "validations",
+        help="inspect persisted promotion validation reports",
+    )
+    validations.add_argument("--store-dir", default=".ago/validations")
+    validation_sub = validations.add_subparsers(
+        dest="validations_action",
+        required=True,
+    )
+    validation_sub.add_parser("list", help="list saved validation reports")
+    validation_show = validation_sub.add_parser("show", help="show one report")
+    validation_show.add_argument("identifier")
 
     return parser
 
@@ -565,6 +619,67 @@ def main(argv: list[str] | None = None) -> int:
                 _print_json(artifact)
             else:
                 print(artifact, end="")
+        return 0
+
+    if args.command == "validate":
+        try:
+            optimization_store = OptimizationStore(Path(args.optimization_store))
+            baseline_result = optimization_store.load(args.baseline_optimization)
+            candidate_result = optimization_store.load(args.candidate_optimization)
+            if baseline_result.best is None:
+                raise ValueError("baseline optimization has no feasible best trial")
+            if candidate_result.best is None:
+                raise ValueError("candidate optimization has no feasible best trial")
+
+            policy = ValidationPolicy(
+                min_throughput_gain_pct=args.min_throughput_gain,
+                max_p99_latency_regression_pct=args.max_p99_regression,
+                max_energy_regression_pct=args.max_energy_regression,
+                max_memory_pressure_regression_pct=args.max_memory_regression,
+                rollback_on_reject=not args.no_rollback_on_reject,
+            )
+            report = validate_trials(
+                baseline_result.best,
+                candidate_result.best,
+                policy,
+            )
+            path = ValidationStore(Path(args.validation_store)).save(report)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+        if args.json:
+            payload = report.to_dict()
+            payload["path"] = str(path)
+            _print_json(payload)
+        else:
+            _plain_validation(report)
+            print(f"Saved: {path}")
+        return 0 if report.accepted else 3
+
+    if args.command == "validations":
+        store = ValidationStore(Path(args.store_dir))
+        if args.validations_action == "list":
+            reports = store.list()
+            if args.json:
+                _print_json([report.to_dict() for report in reports])
+            else:
+                if not reports:
+                    print("No saved validations.")
+                for report in reports:
+                    print(
+                        f"{report.id}  decision={report.decision.value}  "
+                        f"{report.baseline_config.label()} -> "
+                        f"{report.candidate_config.label()}"
+                    )
+            return 0
+
+        try:
+            report = store.load(args.identifier)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        _print_json(report.to_dict()) if args.json else _plain_validation(report)
         return 0
 
     return 2
