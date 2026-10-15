@@ -11,6 +11,15 @@ from .optimizer import (
     ParallelismConfig,
 )
 from .profiling import ExperimentStore, WorkloadProfile, WorkloadProfiler
+from .validation import (
+    PlanDiff,
+    ValidationDecision,
+    ValidationPolicy,
+    ValidationReport,
+    ValidationStore,
+    diff_plans,
+    validate_trials,
+)
 
 __all__ = [
     "ClusterSnapshot",
@@ -26,9 +35,16 @@ __all__ = [
     "OptimizationObjective",
     "OptimizationStore",
     "ParallelismConfig",
+    "PlanDiff",
     "SchedulerBackend",
     "TopologyLink",
+    "ValidationDecision",
+    "ValidationPolicy",
+    "ValidationReport",
+    "ValidationStore",
     "WorkloadProfile",
     "WorkloadProfiler",
+    "diff_plans",
+    "validate_trials",
 ]
-__version__ = "0.4.0a0"
+__version__ = "0.5.0a0"

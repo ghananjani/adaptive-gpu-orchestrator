@@ -2,7 +2,7 @@
 
 **An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, runs canary optimization, and renders safe deployment plans for GPU schedulers.
 
-> Status: **v0.4 pre-alpha — Cluster Controller foundation.**
+> Status: **v0.5 pre-alpha — Guarded Validation.**
 
 ## Control loop
 
@@ -42,6 +42,17 @@ The controller remains **recommend-only** in v0.4: it generates deployable artif
 - Slurm script rendering
 - plans generated from either direct configs or saved optimizer winners
 - node selectors, Slurm partitions, node counts and GPU-per-node controls
+
+
+### Guarded Validation
+- baseline-vs-candidate promotion checks
+- configurable throughput-gain and regression budgets
+- strict metric requirements when a guardrail is configured
+- explicit accept/reject decision
+- rollback recommendation on rejected candidates
+- persisted validation audit trail under `.ago/validations`
+- deployment-plan diff utility
+- `agoctl validate` and `agoctl validations list/show`
 
 ## Quick start
 
@@ -117,6 +128,31 @@ agoctl plan \
   -- python benchmark_or_train.py
 ```
 
+
+## Validate an optimizer candidate before promotion
+
+Compare two saved optimizer winners:
+
+```bash
+agoctl validate \
+  --baseline-optimization baseline-run-id \
+  --candidate-optimization candidate-run-id \
+  --min-throughput-gain 5 \
+  --max-p99-regression 5 \
+  --max-energy-regression 5
+```
+
+A rejected candidate returns a nonzero exit code and records why promotion was blocked. By default, rejection also marks rollback as recommended for future mutating controller integrations.
+
+Inspect validation history:
+
+```bash
+agoctl validations list
+agoctl validations show <validation-id>
+```
+
+See [`docs/guarded-validation.md`](docs/guarded-validation.md).
+
 ## Safety model
 
 v0.4 intentionally stops before scheduler mutation:
@@ -177,6 +213,9 @@ Canary search over parallelism, batch/concurrency and multi-objective constraint
 
 ### v0.4 — Cluster Controller
 Recommend-only Kubernetes/Slurm planning and deployment policy validation.
+
+### v0.5 — Guarded Validation
+Promotion gates, audit reports, rollback recommendations and plan diffs.
 
 ### v1.0 — Closed-loop Autopilot
 Guarded observe/diagnose/experiment/optimize/deploy/validate control loop.
