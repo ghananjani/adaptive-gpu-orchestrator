@@ -22,6 +22,15 @@ from .optimizer import (
     ParallelismConfig,
 )
 from .profiling import ExperimentStore, WorkloadProfile, WorkloadProfiler
+from .studies import (
+    MetricComparison,
+    MetricSummary,
+    ParetoPoint,
+    StudyGroupSummary,
+    StudyReport,
+    StudyStore,
+    analyze_study,
+)
 from .telemetry import (
     DCGMDeviceSample,
     DCGMFrame,
@@ -67,15 +76,21 @@ __all__ = [
     "ExperimentStore",
     "GPUDevice",
     "GPUTimeSeriesSummary",
+    "MetricComparison",
+    "MetricSummary",
     "OptimizationConstraints",
     "OptimizationObjective",
     "OptimizationStore",
     "ParallelismConfig",
+    "ParetoPoint",
     "PhaseSummary",
     "PhaseWindow",
     "PlanDiff",
     "PyTorchDistributedMetricsAdapter",
     "SchedulerBackend",
+    "StudyGroupSummary",
+    "StudyReport",
+    "StudyStore",
     "TelemetrySample",
     "TelemetrySampler",
     "TimeSeriesReport",
@@ -88,6 +103,7 @@ __all__ = [
     "ValidationStore",
     "WorkloadProfile",
     "WorkloadProfiler",
+    "analyze_study",
     "analyze_timeseries",
     "correlate_optimization",
     "diff_plans",
@@ -97,4 +113,4 @@ __all__ = [
     "summarize_nccl",
     "validate_trials",
 ]
-__version__ = "0.8.0a0"
+__version__ = "0.9.0a0"

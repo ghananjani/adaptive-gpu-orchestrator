@@ -2,7 +2,7 @@
 
 **An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, normalizes native workload metrics, runs canary optimization, and renders safe deployment plans for GPU schedulers.
 
-> Status: **v0.8 pre-alpha — DCGM + Time-Series Analysis.**
+> Status: **v0.9 pre-alpha — Statistical Experiment Studies.**
 
 ## Control loop
 
@@ -56,6 +56,18 @@ The controller remains recommend-only: it generates deployment artifacts and pro
 - optional DCGM cross-checks
 - persisted reports under `.ago/timeseries`
 - `agoctl timeseries analyze|list|show`
+
+### Statistical Experiment Studies
+- repeated-run aggregation over saved optimization results
+- Student-t 95% confidence intervals
+- baseline-vs-candidate percent changes
+- direction-aware relative improvement
+- Cohen's d effect size
+- selected-configuration stability
+- throughput/latency/energy Pareto frontier
+- adapter-specific metric aggregation
+- persisted reports under `.ago/studies`
+- `agoctl study analyze` and `agoctl studies list/show`
 
 ### Configuration Optimizer
 - TP/PP/DP + batch/concurrency search spaces
@@ -193,6 +205,29 @@ agoctl plan \
 
 The current Kubernetes renderer emits a single-pod `batch/v1 Job`; the target node therefore needs enough GPUs for the requested world size.
 
+## Compare repeated experiment groups
+
+Use saved optimization runs as replicates:
+
+```bash
+agoctl study analyze \
+  --group h100=run-a1,run-a2,run-a3 \
+  --group h200=run-b1,run-b2,run-b3
+```
+
+The first group is treated as the comparison baseline. Each group reports metric means, 95% confidence intervals when at least two replicates exist, selected-config stability, and adapter-specific metrics. Candidate groups are compared to the baseline with percent change, direction-aware relative improvement and Cohen's d when enough replicates exist.
+
+When every run exposes throughput, p99 latency and energy, the study also computes a non-dominated Pareto frontier.
+
+Inspect history:
+
+```bash
+agoctl studies list
+agoctl studies show <study-id>
+```
+
+See [`docs/statistical-studies.md`](docs/statistical-studies.md).
+
 ## Analyze per-GPU time series
 
 Profiles collected with v0.8 retain per-GPU telemetry while preserving the existing aggregate summary fields.
@@ -320,6 +355,9 @@ Offline correlation of optimizer results with GPU telemetry, adapter metrics and
 
 ### v0.8 — DCGM + Time-Series Analysis
 Per-GPU telemetry, DCGM ingestion, phase alignment and persistent straggler analysis.
+
+### v0.9 — Statistical Experiment Studies
+Repeated-run confidence intervals, effect sizes, configuration stability and Pareto analysis.
 
 ### v1.0 — Closed-loop Autopilot
 Guarded observe/diagnose/experiment/optimize/deploy/validate control loop.
