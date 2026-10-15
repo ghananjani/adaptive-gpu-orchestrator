@@ -5,6 +5,11 @@ import json
 import sys
 from pathlib import Path
 
+from adaptive_gpu_orchestrator.adapters import (
+    AdaptedCommandCanaryRunner,
+    PyTorchDistributedMetricsAdapter,
+    VLLMMetricsAdapter,
+)
 from adaptive_gpu_orchestrator.benchmarks import NCCLBenchmark, parse_nccl_output
 from adaptive_gpu_orchestrator.controller import (
     DeploymentPlanner,
@@ -271,6 +276,12 @@ def build_parser() -> argparse.ArgumentParser:
         choices=[item.value for item in OptimizationObjective],
         default=OptimizationObjective.THROUGHPUT.value,
     )
+    optimize.add_argument(
+        "--adapter",
+        choices=("generic", "vllm", "pytorch-distributed"),
+        default="generic",
+        help="normalize native benchmark output before optimizer scoring",
+    )
     optimize.add_argument("--exact-world-size", action="store_true")
     optimize.add_argument("--max-candidates", type=int, default=64)
     optimize.add_argument("--timeout", type=float, default=120.0)
@@ -512,8 +523,26 @@ def main(argv: list[str] | None = None) -> int:
             max_memory_pressure_pct=args.max_memory_pressure,
         )
         try:
+            if args.adapter == "vllm":
+                runner = AdaptedCommandCanaryRunner(
+                    adapter=VLLMMetricsAdapter(),
+                    command=command,
+                    timeout_s=args.timeout,
+                )
+            elif args.adapter == "pytorch-distributed":
+                runner = AdaptedCommandCanaryRunner(
+                    adapter=PyTorchDistributedMetricsAdapter(),
+                    command=command,
+                    timeout_s=args.timeout,
+                )
+            else:
+                runner = CommandCanaryRunner(
+                    command=command,
+                    timeout_s=args.timeout,
+                )
+
             result = ConfigurationOptimizer(
-                runner=CommandCanaryRunner(command=command, timeout_s=args.timeout),
+                runner=runner,
                 objective=OptimizationObjective(args.objective),
                 constraints=constraints,
             ).optimize(candidates, baseline=candidates[0])
