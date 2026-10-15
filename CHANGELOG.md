@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.0a0
+
+Configuration Optimizer milestone:
+
+- reproducible TP/PP/DP + batch/concurrency configuration model
+- GPU-budget-aware candidate generation
+- exact-world-size search mode
+- command-based canary benchmark runner
+- benchmark environment contract via AGO_* variables
+- throughput, latency, energy and balanced objectives
+- p99-latency, energy, minimum-throughput and memory-pressure constraints
+- persisted optimization history
+- `agoctl optimize`
+- `agoctl optimizations list/show`
+- dry-run search-space inspection
+- deterministic optimizer and CLI tests
+
 ## 0.2.0a0
 
 Workload Intelligence milestone:
