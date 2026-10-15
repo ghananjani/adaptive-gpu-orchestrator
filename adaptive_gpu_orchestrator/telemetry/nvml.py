@@ -39,28 +39,33 @@ class NVMLProvider:
     def sample(self) -> list[GPUDevice]:
         pynvml = self._ensure_initialized()
         devices: list[GPUDevice] = []
+
+        def optional(call, *args, divisor: float = 1.0):
+            try:
+                return float(call(*args)) / divisor
+            except pynvml.NVMLError:
+                return None
+
         for index in range(pynvml.nvmlDeviceGetCount()):
             handle = pynvml.nvmlDeviceGetHandleByIndex(index)
             memory = pynvml.nvmlDeviceGetMemoryInfo(handle)
             util = pynvml.nvmlDeviceGetUtilizationRates(handle)
             pci = pynvml.nvmlDeviceGetPciInfo(handle)
 
-            def optional(call, divisor: float = 1.0):
-                try:
-                    return float(call()) / divisor
-                except pynvml.NVMLError:
-                    return None
-
-            power_draw = optional(lambda: pynvml.nvmlDeviceGetPowerUsage(handle), 1000.0)
+            power_draw = optional(
+                pynvml.nvmlDeviceGetPowerUsage,
+                handle,
+                divisor=1000.0,
+            )
             power_limit = optional(
-                lambda: pynvml.nvmlDeviceGetEnforcedPowerLimit(handle),
-                1000.0,
+                pynvml.nvmlDeviceGetEnforcedPowerLimit,
+                handle,
+                divisor=1000.0,
             )
             temperature = optional(
-                lambda: pynvml.nvmlDeviceGetTemperature(
-                    handle,
-                    pynvml.NVML_TEMPERATURE_GPU,
-                )
+                pynvml.nvmlDeviceGetTemperature,
+                handle,
+                pynvml.NVML_TEMPERATURE_GPU,
             )
 
             devices.append(
