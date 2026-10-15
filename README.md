@@ -1,8 +1,8 @@
 # Adaptive GPU Orchestrator for AI Workloads
 
-**An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, captures live utilization, ingests communication benchmarks, diagnoses common bottlenecks, and lays the foundation for closed-loop optimization of distributed AI workloads.
+**An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, continuously profiles GPU workloads, persists experiments, diagnoses bottlenecks, and provides the foundation for closed-loop optimization of distributed AI training and LLM inference.
 
-> Status: **v0.1 pre-alpha**. The first milestone focuses on trustworthy observation and diagnosis before automatic remediation.
+> Status: **v0.2 pre-alpha — Workload Intelligence.**
 
 ## Why this exists
 
@@ -10,25 +10,44 @@ Modern AI clusters already have schedulers, profilers, metrics stacks, and servi
 
 **observe → diagnose → experiment → optimize → schedule → validate → learn**
 
-`adaptive_gpu_orchestrator` starts with the first two steps and is intentionally designed to grow into topology-aware placement, TP/PP/DP autotuning, KV-cache-aware scheduling, energy-aware orchestration, and learned performance prediction.
+Adaptive GPU Orchestrator is designed to become that layer while remaining scheduler-agnostic and explainable.
 
-## v0.1 capabilities
+## Current capabilities
+
+### GPU Doctor
 
 - NVIDIA GPU discovery through `nvidia-smi`
 - H100/H200/A100/etc. model, memory, utilization, temperature, power, PCI bus and compute-capability capture
-- `nvidia-smi topo -m` parsing into GPU-to-GPU links
-- NCCL `all_reduce_perf` wrapper + parser
-- Rule-based diagnoses for:
+- NVLink/NVSwitch/PCIe topology parsing
+- NCCL `all_reduce_perf` parsing and benchmark execution
+- explainable diagnosis of:
   - GPU underutilization
   - memory pressure
-  - communication-bound workloads
+  - communication bottlenecks
   - load imbalance / stragglers
-  - thermal or power ceilings
-- Human-readable and JSON CLI output
-- Safe no-GPU mode for local development and CI
-- Dependency-light Python API that works without CUDA libraries installed
+  - thermal and power ceilings
+- topology-aware logical-rank placement optimization
+
+### Workload Intelligence
+
+- continuous telemetry sampling around an arbitrary workload
+- dependency-free `nvidia-smi` telemetry provider
+- optional lower-overhead NVML provider via `nvidia-ml-py`
+- workload profiles with duration, command, tags and telemetry time series
+- experiment persistence under `.ago/experiments`
+- workload-level bottleneck diagnosis
+- reusable Python profiling API
+- no-GPU degradation for development and CI
 
 ## Quick start
+
+Install locally:
+
+```bash
+pip install -e .
+```
+
+Inspect a GPU host:
 
 ```bash
 agoctl inspect
@@ -36,47 +55,71 @@ agoctl topology
 agoctl doctor
 ```
 
-Machine-readable output:
+Profile an AI workload:
+
+```bash
+agoctl profile \
+  --name llama70b-serving \
+  --interval 0.5 \
+  --tag model=llama70b \
+  --tag environment=benchmark \
+  -- python serve.py
+```
+
+Or collect a timed observation window without launching a command:
+
+```bash
+agoctl profile --name cluster-baseline --duration 30 --interval 1
+```
+
+Use NVML sampling:
+
+```bash
+pip install -e '.[nvml]'
+agoctl profile --provider nvml --name training-run -- python train.py
+```
+
+Inspect saved experiments:
+
+```bash
+agoctl experiments list
+agoctl experiments show <experiment-id>
+```
+
+Diagnose a previously captured workload:
+
+```bash
+agoctl doctor --profile <experiment-id>
+```
+
+Machine-readable output is available with the global `--json` flag:
 
 ```bash
 agoctl --json inspect
-agoctl --json doctor
-```
-
-Install locally:
-
-```bash
-pip install -e .
-agoctl inspect
-```
-
-## Example output
-
-```text
-Host: gpu-node-01
-Driver: 570.xx  CUDA: 12.x
-GPUs: 8
-  GPU 0: NVIDIA H100 80GB HBM3 | util=47.0% | memory=68231/81559 MiB
-  ...
-
-Bottleneck: communication_bound
-Severity: medium
-Low GPU utilization coincides with weak collective bandwidth.
-
-Recommendations:
-  - [high] Validate NCCL topology and rank placement
-  - [medium] Profile collective time
+agoctl --json experiments list
 ```
 
 ## Python API
 
 ```python
-from adaptive_gpu_orchestrator import Doctor
+from adaptive_gpu_orchestrator import (
+    Doctor,
+    ExperimentStore,
+    WorkloadProfiler,
+)
 
-snapshot = Doctor().inspect()
-print(snapshot.to_dict())
+profiler = WorkloadProfiler()
+profile = profiler.run(
+    name="llama-inference",
+    command=["python", "serve.py"],
+    duration_s=60,
+    interval_s=1,
+)
 
-report = Doctor().diagnose()
+store = ExperimentStore()
+store.save(profile)
+
+report = Doctor().diagnose_profile(profile)
 print(report.to_dict())
 ```
 
@@ -92,16 +135,14 @@ agoctl benchmark-nccl \
   --gpus 8
 ```
 
-Future releases will persist benchmark baselines per GPU model/topology and compare live measurements against hardware-specific expectations instead of generic warning thresholds.
-
 ## Design principles
 
 1. **Measure first.** Automatic remediation without trustworthy observability is dangerous.
 2. **Topology is a first-class input.** A GPU is not interchangeable with every other GPU in a distributed job.
-3. **Explain every recommendation.** The controller should surface evidence, not output opaque advice.
-4. **Degrade gracefully.** Developers should be able to run tests and reason about the code without access to an H100 cluster.
-5. **Automate experiments, not assumptions.** Later optimizers will validate candidate configurations with canary runs.
-6. **Stay scheduler-agnostic.** Kubernetes/Kueue, Slurm, Ray, and bare-metal adapters belong behind clean interfaces.
+3. **Explain every recommendation.** The controller should surface evidence, not opaque advice.
+4. **Degrade gracefully.** Developers can run tests and reason about the system without H100 access.
+5. **Automate experiments, not assumptions.** Candidate optimizations should be validated by canary runs.
+6. **Stay scheduler-agnostic.** Kubernetes/Kueue, Slurm, Ray and bare-metal adapters belong behind clean interfaces.
 
 ## Planned architecture
 
@@ -130,8 +171,6 @@ See [`docs/architecture.md`](docs/architecture.md) for the deeper design.
 
 ## Research directions
 
-The platform is deliberately shaped around publishable systems questions:
-
 - topology-aware placement for distributed LLM workloads
 - automated TP/PP/DP configuration search
 - heterogeneous H100/H200 scheduling
@@ -146,23 +185,23 @@ See [`docs/research-roadmap.md`](docs/research-roadmap.md).
 ## Roadmap
 
 ### v0.1 — GPU Doctor
-Discovery, topology, utilization, NCCL parsing, explainable diagnosis.
+Discovery, topology, NCCL parsing, explainable diagnosis and placement baseline.
 
-### v0.2 — Workload Profiler
-PyTorch/vLLM instrumentation, per-phase timing, DCGM telemetry, experiment persistence.
+### v0.2 — Workload Intelligence
+Continuous telemetry, workload profiles, optional NVML, experiment persistence and profile diagnosis.
 
 ### v0.3 — Configuration Optimizer
 Automated canaries over batch size, placement, TP/PP/DP and runtime settings.
 
 ### v0.4 — Cluster Controller
-Kubernetes/Kueue + Slurm adapters, topology-aware placement, policy engine.
+Kubernetes/Kueue + Slurm adapters, topology-aware placement and policy engine.
 
 ### v1.0 — Closed-loop Autopilot
 Continuous observe/diagnose/experiment/optimize cycle with safety guardrails.
 
 ## Contributing
 
-This project aims to be useful to both ML systems researchers and production GPU infrastructure teams. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## License
 
