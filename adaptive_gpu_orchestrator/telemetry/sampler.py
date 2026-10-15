@@ -33,7 +33,7 @@ class TelemetrySample:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "TelemetrySample":
+    def from_dict(cls, data: dict) -> TelemetrySample:
         return cls(
             offset_s=float(data["offset_s"]),
             gpu_count=int(data["gpu_count"]),
