@@ -1,10 +1,10 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from pathlib import Path
 import re
 import shlex
 import subprocess
-from dataclasses import dataclass
-from pathlib import Path
 
 from adaptive_gpu_orchestrator.models import NCCLResult
 
