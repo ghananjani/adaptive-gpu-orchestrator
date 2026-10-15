@@ -1,5 +1,6 @@
 """Adaptive GPU Orchestrator for AI Workloads."""
 
+from .controller import DeploymentPlan, DeploymentPlanner, DeploymentPolicy, SchedulerBackend
 from .doctor import Doctor
 from .models import ClusterSnapshot, DiagnosisReport, GPUDevice, TopologyLink
 from .optimizer import (
@@ -14,6 +15,9 @@ from .profiling import ExperimentStore, WorkloadProfile, WorkloadProfiler
 __all__ = [
     "ClusterSnapshot",
     "ConfigurationOptimizer",
+    "DeploymentPlan",
+    "DeploymentPlanner",
+    "DeploymentPolicy",
     "DiagnosisReport",
     "Doctor",
     "ExperimentStore",
@@ -22,8 +26,9 @@ __all__ = [
     "OptimizationObjective",
     "OptimizationStore",
     "ParallelismConfig",
+    "SchedulerBackend",
     "TopologyLink",
     "WorkloadProfile",
     "WorkloadProfiler",
 ]
-__version__ = "0.3.0a0"
+__version__ = "0.4.0a0"
