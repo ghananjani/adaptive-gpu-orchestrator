@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.5.0a0
+
+Guarded Validation milestone:
+
+- baseline-vs-candidate promotion validation
+- throughput-gain guardrails
+- p99-latency, energy and memory-pressure regression budgets
+- strict missing-metric handling for configured guardrails
+- accept/reject decision model
+- rollback recommendation on rejected candidates
+- persisted validation audit history
+- deployment-plan diff utility
+- `agoctl validate`
+- `agoctl validations list/show`
+- validation, persistence, CLI and plan-diff tests
+
 ## 0.4.0a0
 
 Cluster Controller foundation:
