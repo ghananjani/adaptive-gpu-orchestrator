@@ -17,45 +17,41 @@ def apply_constraints(
     if metrics.exit_code != 0:
         reasons.append(f"benchmark exited with code {metrics.exit_code}")
 
-    if (
-        constraints.max_p99_latency_ms is not None
-        and metrics.p99_latency_ms is not None
-        and metrics.p99_latency_ms > constraints.max_p99_latency_ms
-    ):
-        reasons.append(
-            f"p99 latency {metrics.p99_latency_ms:.3f} ms exceeds "
-            f"{constraints.max_p99_latency_ms:.3f} ms"
-        )
+    if constraints.max_p99_latency_ms is not None:
+        if metrics.p99_latency_ms is None:
+            reasons.append("p99 latency metric is required by the configured constraint")
+        elif metrics.p99_latency_ms > constraints.max_p99_latency_ms:
+            reasons.append(
+                f"p99 latency {metrics.p99_latency_ms:.3f} ms exceeds "
+                f"{constraints.max_p99_latency_ms:.3f} ms"
+            )
 
-    if (
-        constraints.max_energy_joules is not None
-        and metrics.energy_joules is not None
-        and metrics.energy_joules > constraints.max_energy_joules
-    ):
-        reasons.append(
-            f"energy {metrics.energy_joules:.3f} J exceeds "
-            f"{constraints.max_energy_joules:.3f} J"
-        )
+    if constraints.max_energy_joules is not None:
+        if metrics.energy_joules is None:
+            reasons.append("energy metric is required by the configured constraint")
+        elif metrics.energy_joules > constraints.max_energy_joules:
+            reasons.append(
+                f"energy {metrics.energy_joules:.3f} J exceeds "
+                f"{constraints.max_energy_joules:.3f} J"
+            )
 
-    if (
-        constraints.min_throughput_per_s is not None
-        and metrics.throughput_per_s is not None
-        and metrics.throughput_per_s < constraints.min_throughput_per_s
-    ):
-        reasons.append(
-            f"throughput {metrics.throughput_per_s:.3f}/s is below "
-            f"{constraints.min_throughput_per_s:.3f}/s"
-        )
+    if constraints.min_throughput_per_s is not None:
+        if metrics.throughput_per_s is None:
+            reasons.append("throughput metric is required by the configured constraint")
+        elif metrics.throughput_per_s < constraints.min_throughput_per_s:
+            reasons.append(
+                f"throughput {metrics.throughput_per_s:.3f}/s is below "
+                f"{constraints.min_throughput_per_s:.3f}/s"
+            )
 
-    if (
-        constraints.max_memory_pressure_pct is not None
-        and metrics.memory_pressure_pct is not None
-        and metrics.memory_pressure_pct > constraints.max_memory_pressure_pct
-    ):
-        reasons.append(
-            f"memory pressure {metrics.memory_pressure_pct:.3f}% exceeds "
-            f"{constraints.max_memory_pressure_pct:.3f}%"
-        )
+    if constraints.max_memory_pressure_pct is not None:
+        if metrics.memory_pressure_pct is None:
+            reasons.append("memory-pressure metric is required by the configured constraint")
+        elif metrics.memory_pressure_pct > constraints.max_memory_pressure_pct:
+            reasons.append(
+                f"memory pressure {metrics.memory_pressure_pct:.3f}% exceeds "
+                f"{constraints.max_memory_pressure_pct:.3f}%"
+            )
 
     trial.feasible = not reasons
     trial.rejection_reasons = reasons
