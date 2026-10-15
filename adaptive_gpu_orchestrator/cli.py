@@ -16,6 +16,10 @@ from adaptive_gpu_orchestrator.controller import (
     DeploymentPolicy,
     SchedulerBackend,
 )
+from adaptive_gpu_orchestrator.correlation import (
+    CorrelationStore,
+    correlate_optimization,
+)
 from adaptive_gpu_orchestrator.doctor import Doctor
 from adaptive_gpu_orchestrator.optimizer import (
     CommandCanaryRunner,
@@ -164,6 +168,28 @@ def _plain_validation(report) -> None:
         print("\nReasons:")
         for reason in report.reasons:
             print(f"  - {reason}")
+
+
+def _plain_correlation(report) -> None:
+    print(
+        f"Correlation: {report.id}  optimization={report.optimization_id}  "
+        f"profile={report.profile_id}"
+    )
+    print(f"Config: {report.config.label()}")
+    if report.telemetry:
+        print("\nTelemetry:")
+        for name, value in sorted(report.telemetry.items()):
+            if value is not None:
+                print(f"  - {name}: {value}")
+    if report.nccl:
+        print("\nNCCL:")
+        for name, value in sorted(report.nccl.items()):
+            if value is not None:
+                print(f"  - {name}: {value}")
+    if report.findings:
+        print("\nFindings:")
+        for finding in report.findings:
+            print(f"  - {finding}")
 
 
 def _parse_tags(values: list[str]) -> dict[str, str]:
@@ -372,6 +398,30 @@ def build_parser() -> argparse.ArgumentParser:
     validation_sub.add_parser("list", help="list saved validation reports")
     validation_show = validation_sub.add_parser("show", help="show one report")
     validation_show.add_argument("identifier")
+
+    correlate = sub.add_parser(
+        "correlate",
+        help="correlate an optimizer winner with telemetry and optional NCCL results",
+    )
+    correlate.add_argument("--optimization", required=True)
+    correlate.add_argument("--profile", required=True)
+    correlate.add_argument("--optimization-store", default=".ago/optimizations")
+    correlate.add_argument("--experiment-store", default=".ago/experiments")
+    correlate.add_argument("--nccl-output")
+    correlate.add_argument("--store-dir", default=".ago/correlations")
+
+    correlations = sub.add_parser(
+        "correlations",
+        help="inspect persisted telemetry correlation reports",
+    )
+    correlations.add_argument("--store-dir", default=".ago/correlations")
+    correlation_sub = correlations.add_subparsers(
+        dest="correlations_action",
+        required=True,
+    )
+    correlation_sub.add_parser("list", help="list saved correlation reports")
+    correlation_show = correlation_sub.add_parser("show", help="show one report")
+    correlation_show.add_argument("identifier")
 
     return parser
 
@@ -709,6 +759,61 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
         _print_json(report.to_dict()) if args.json else _plain_validation(report)
+        return 0
+
+    if args.command == "correlate":
+        try:
+            optimization = OptimizationStore(Path(args.optimization_store)).load(
+                args.optimization
+            )
+            profile = ExperimentStore(Path(args.experiment_store)).load(args.profile)
+
+            nccl_results = None
+            if args.nccl_output:
+                with open(args.nccl_output, "r", encoding="utf-8") as handle:
+                    nccl_results = parse_nccl_output(handle.read())
+
+            report = correlate_optimization(
+                optimization,
+                profile,
+                nccl_results=nccl_results,
+            )
+            path = CorrelationStore(Path(args.store_dir)).save(report)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+        if args.json:
+            payload = report.to_dict()
+            payload["path"] = str(path)
+            _print_json(payload)
+        else:
+            _plain_correlation(report)
+            print(f"Saved: {path}")
+        return 0
+
+    if args.command == "correlations":
+        store = CorrelationStore(Path(args.store_dir))
+        if args.correlations_action == "list":
+            reports = store.list()
+            if args.json:
+                _print_json([report.to_dict() for report in reports])
+            else:
+                if not reports:
+                    print("No saved correlations.")
+                for report in reports:
+                    print(
+                        f"{report.id}  optimization={report.optimization_id}  "
+                        f"profile={report.profile_id}  config={report.config.label()}"
+                    )
+            return 0
+
+        try:
+            report = store.load(args.identifier)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        _print_json(report.to_dict()) if args.json else _plain_correlation(report)
         return 0
 
     return 2

@@ -2,7 +2,7 @@
 
 **An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, normalizes native workload metrics, runs canary optimization, and renders safe deployment plans for GPU schedulers.
 
-> Status: **v0.6 pre-alpha — Workload Adapters.**
+> Status: **v0.7 pre-alpha — Telemetry Correlation.**
 
 ## Control loop
 
@@ -34,6 +34,16 @@ The controller remains recommend-only: it generates deployment artifacts and pro
 - TTFT / TPOT / ITL retention for LLM serving
 - communication / compute / phase timing retention for distributed training
 - `agoctl optimize --adapter ...`
+
+### Telemetry Correlation
+- correlate a saved optimizer winner with a saved workload profile
+- optional NCCL baseline ingestion
+- derived energy estimates from power telemetry
+- GPU utilization, imbalance, memory-pressure and thermal signals
+- adapter-native metric carry-through
+- descriptive, non-causal findings
+- persisted reports under `.ago/correlations`
+- `agoctl correlate` and `agoctl correlations list/show`
 
 ### Configuration Optimizer
 - TP/PP/DP + batch/concurrency search spaces
@@ -171,6 +181,30 @@ agoctl plan \
 
 The current Kubernetes renderer emits a single-pod `batch/v1 Job`; the target node therefore needs enough GPUs for the requested world size.
 
+## Correlate optimizer results with telemetry
+
+Combine a saved optimizer winner with a saved workload profile:
+
+```bash
+agoctl correlate \
+  --optimization <optimization-id> \
+  --profile <experiment-id> \
+  --nccl-output nccl-all-reduce.txt
+```
+
+The report combines normalized trial metrics, adapter-specific metrics, GPU utilization, utilization imbalance, memory pressure, temperature, power, an estimated energy value, and optional NCCL bandwidth statistics.
+
+Correlation findings are intentionally descriptive rather than causal. They identify signals worth investigating; they do not claim that a specific telemetry signal caused the measured throughput or latency.
+
+Inspect saved reports:
+
+```bash
+agoctl correlations list
+agoctl correlations show <correlation-id>
+```
+
+See [`docs/telemetry-correlation.md`](docs/telemetry-correlation.md).
+
 ## Validate an optimizer candidate before promotion
 
 ```bash
@@ -228,6 +262,9 @@ Promotion gates, audit reports, rollback recommendations and plan diffs.
 
 ### v0.6 — Workload Adapters
 Native vLLM and distributed PyTorch metric normalization with preserved research metrics.
+
+### v0.7 — Telemetry Correlation
+Offline correlation of optimizer results with GPU telemetry, adapter metrics and optional NCCL baselines.
 
 ### v1.0 — Closed-loop Autopilot
 Guarded observe/diagnose/experiment/optimize/deploy/validate control loop.

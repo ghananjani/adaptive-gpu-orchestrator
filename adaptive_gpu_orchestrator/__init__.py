@@ -6,6 +6,12 @@ from .adapters import (
     VLLMMetricsAdapter,
 )
 from .controller import DeploymentPlan, DeploymentPlanner, DeploymentPolicy, SchedulerBackend
+from .correlation import (
+    CorrelationReport,
+    CorrelationStore,
+    correlate_optimization,
+    summarize_nccl,
+)
 from .doctor import Doctor
 from .models import ClusterSnapshot, DiagnosisReport, GPUDevice, TopologyLink
 from .optimizer import (
@@ -30,6 +36,8 @@ __all__ = [
     "AdaptedCommandCanaryRunner",
     "ClusterSnapshot",
     "ConfigurationOptimizer",
+    "CorrelationReport",
+    "CorrelationStore",
     "DeploymentPlan",
     "DeploymentPlanner",
     "DeploymentPolicy",
@@ -52,7 +60,9 @@ __all__ = [
     "ValidationStore",
     "WorkloadProfile",
     "WorkloadProfiler",
+    "correlate_optimization",
     "diff_plans",
+    "summarize_nccl",
     "validate_trials",
 ]
-__version__ = "0.6.0a0"
+__version__ = "0.7.0a0"

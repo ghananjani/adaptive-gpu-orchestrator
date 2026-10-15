@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.7.0a0
+
+Telemetry Correlation milestone:
+
+- correlation report model and persistence
+- optimizer winner + workload-profile correlation
+- optional NCCL baseline summarization
+- utilization, imbalance, memory-pressure and thermal signals
+- estimated energy from average power and profile duration
+- generic energy-per-throughput-unit derivation
+- adapter-native metric carry-through
+- descriptive communication findings
+- `agoctl correlate`
+- `agoctl correlations list/show`
+- correlation, store and CLI tests
+
 ## 0.6.0a0
 
 Workload Adapters milestone:
