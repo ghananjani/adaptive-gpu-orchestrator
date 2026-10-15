@@ -40,19 +40,21 @@ class OptimizationStore:
         def parse_trial(payload: dict | None) -> TrialResult | None:
             if payload is None:
                 return None
+            score = payload.get("score")
             return TrialResult(
                 config=ParallelismConfig.from_dict(payload["config"]),
                 metrics=TrialMetrics.from_dict(payload["metrics"]),
                 feasible=bool(payload.get("feasible", True)),
-                score=payload.get("score"),
+                score=None if score is None else float(score),
                 rejection_reasons=list(payload.get("rejection_reasons", [])),
             )
 
-        trials = [
-            parsed
-            for item in data.get("trials", [])
-            if (parsed := parse_trial(item)) is not None
-        ]
+        trials: list[TrialResult] = []
+        for item in data.get("trials", []):
+            parsed = parse_trial(item)
+            if parsed is not None:
+                trials.append(parsed)
+
         constraints = OptimizationConstraints(**data.get("constraints", {}))
         return OptimizationResult(
             id=str(data["id"]),
@@ -62,3 +64,19 @@ class OptimizationStore:
             best=parse_trial(data.get("best")),
             baseline=parse_trial(data.get("baseline")),
         )
+
+    def list(self) -> list[OptimizationResult]:
+        if not self.root.exists():
+            return []
+        paths = sorted(
+            self.root.glob("*.json"),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        results: list[OptimizationResult] = []
+        for path in paths:
+            try:
+                results.append(self.load(path))
+            except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+                continue
+        return results
