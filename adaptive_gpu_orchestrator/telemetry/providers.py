@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Protocol
 
-from adaptive_gpu_orchestrator.discovery import NvidiaSMI
+from adaptive_gpu_orchestrator.discovery import NvidiaSMI, NvidiaSMIError
 from adaptive_gpu_orchestrator.models import GPUDevice
 
 
@@ -24,4 +24,7 @@ class NvidiaSMIProvider:
         self.nvidia_smi = nvidia_smi or NvidiaSMI()
 
     def sample(self) -> list[GPUDevice]:
-        return self.nvidia_smi.query_gpus()
+        try:
+            return self.nvidia_smi.query_gpus()
+        except NvidiaSMIError:
+            return []
