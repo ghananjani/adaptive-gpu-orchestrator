@@ -6,6 +6,11 @@ import sys
 from pathlib import Path
 
 from adaptive_gpu_orchestrator.benchmarks import NCCLBenchmark, parse_nccl_output
+from adaptive_gpu_orchestrator.controller import (
+    DeploymentPlanner,
+    DeploymentPolicy,
+    SchedulerBackend,
+)
 from adaptive_gpu_orchestrator.doctor import Doctor
 from adaptive_gpu_orchestrator.optimizer import (
     CommandCanaryRunner,
@@ -13,9 +18,11 @@ from adaptive_gpu_orchestrator.optimizer import (
     OptimizationConstraints,
     OptimizationObjective,
     OptimizationStore,
+    ParallelismConfig,
     generate_candidates,
 )
 from adaptive_gpu_orchestrator.profiling import ExperimentStore, WorkloadProfiler
+from adaptive_gpu_orchestrator.schedulers import KubernetesRenderer, SlurmRenderer
 from adaptive_gpu_orchestrator.telemetry import (
     NvidiaSMIProvider,
     NVMLProvider,
@@ -265,6 +272,42 @@ def build_parser() -> argparse.ArgumentParser:
     optimization_show = optimization_sub.add_parser("show", help="show one run")
     optimization_show.add_argument("identifier")
 
+    plan = sub.add_parser(
+        "plan",
+        help="render a recommend-only scheduler plan from a configuration",
+    )
+    plan.add_argument(
+        "--backend",
+        choices=[item.value for item in SchedulerBackend],
+        required=True,
+    )
+    plan.add_argument("--available-gpus", type=int, required=True)
+    plan.add_argument("--optimization")
+    plan.add_argument("--optimization-store", default=".ago/optimizations")
+    plan.add_argument("--tp", type=int, default=1)
+    plan.add_argument("--pp", type=int, default=1)
+    plan.add_argument("--dp", type=int, default=1)
+    plan.add_argument("--batch", type=int, default=1)
+    plan.add_argument("--concurrency", type=int, default=1)
+    plan.add_argument("--max-gpus", type=int)
+    plan.add_argument("--require-exact-gpu-count", action="store_true")
+    plan.add_argument(
+        "--node-selector",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+    )
+    plan.add_argument("--image")
+    plan.add_argument("--job-name", default="ago-workload")
+    plan.add_argument("--nodes", type=int, default=1)
+    plan.add_argument("--gpus-per-node", type=int)
+    plan.add_argument("--partition")
+    plan.add_argument(
+        "workload_command",
+        nargs=argparse.REMAINDER,
+        help="workload command after --",
+    )
+
     return parser
 
 
@@ -454,6 +497,74 @@ def main(argv: list[str] | None = None) -> int:
 
         result = store.load(args.identifier)
         _print_json(result.to_dict()) if args.json else _plain_optimization(result)
+        return 0
+
+    if args.command == "plan":
+        command = list(args.workload_command)
+        if command and command[0] == "--":
+            command = command[1:]
+        if not command:
+            print("error: plan requires a workload command after --", file=sys.stderr)
+            return 2
+
+        try:
+            if args.optimization:
+                optimized = OptimizationStore(Path(args.optimization_store)).load(
+                    args.optimization
+                )
+                if optimized.best is None:
+                    raise ValueError("saved optimization has no feasible best configuration")
+                config = optimized.best.config
+            else:
+                config = ParallelismConfig(
+                    tensor_parallel=args.tp,
+                    pipeline_parallel=args.pp,
+                    data_parallel=args.dp,
+                    batch_size=args.batch,
+                    concurrency=args.concurrency,
+                )
+
+            backend = SchedulerBackend(args.backend)
+            policy = DeploymentPolicy(
+                max_gpus=args.max_gpus,
+                require_exact_gpu_count=args.require_exact_gpu_count,
+                recommend_only=True,
+            )
+            deployment = DeploymentPlanner(policy).plan(
+                config=config,
+                backend=backend,
+                command=command,
+                available_gpus=args.available_gpus,
+                node_selector=_parse_tags(args.node_selector),
+            )
+
+            if backend is SchedulerBackend.KUBERNETES:
+                if not args.image:
+                    raise ValueError("--image is required for Kubernetes plans")
+                artifact = KubernetesRenderer(
+                    image=args.image,
+                    job_name=args.job_name,
+                ).render(deployment)
+            else:
+                artifact = SlurmRenderer(
+                    job_name=args.job_name,
+                    nodes=args.nodes,
+                    gpus_per_node=args.gpus_per_node,
+                    partition=args.partition,
+                ).render(deployment)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+        if args.json:
+            _print_json({"plan": deployment.to_dict(), "artifact": artifact})
+        else:
+            for warning in deployment.warnings:
+                print(f"warning: {warning}", file=sys.stderr)
+            if isinstance(artifact, dict):
+                _print_json(artifact)
+            else:
+                print(artifact, end="")
         return 0
 
     return 2
