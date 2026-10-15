@@ -2,7 +2,7 @@
 
 **An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, normalizes native workload metrics, runs canary optimization, and renders safe deployment plans for GPU schedulers.
 
-> Status: **v0.7 pre-alpha — Telemetry Correlation.**
+> Status: **v0.8 pre-alpha — DCGM + Time-Series Analysis.**
 
 ## Control loop
 
@@ -44,6 +44,18 @@ The controller remains recommend-only: it generates deployment artifacts and pro
 - descriptive, non-causal findings
 - persisted reports under `.ago/correlations`
 - `agoctl correlate` and `agoctl correlations list/show`
+
+### DCGM + Time-Series Analysis
+- per-GPU telemetry retained in every new workload sample
+- backward-compatible loading of aggregate-only historical profiles
+- DCGM Exporter/Prometheus ingestion
+- `dcgmi dmon` trace ingestion
+- persistent GPU-utilization straggler detection
+- memory-pressure and thermal time-series findings
+- user-defined phase windows aligned by profile offset
+- optional DCGM cross-checks
+- persisted reports under `.ago/timeseries`
+- `agoctl timeseries analyze|list|show`
 
 ### Configuration Optimizer
 - TP/PP/DP + batch/concurrency search spaces
@@ -181,6 +193,46 @@ agoctl plan \
 
 The current Kubernetes renderer emits a single-pod `batch/v1 Job`; the target node therefore needs enough GPUs for the requested world size.
 
+## Analyze per-GPU time series
+
+Profiles collected with v0.8 retain per-GPU telemetry while preserving the existing aggregate summary fields.
+
+```bash
+agoctl timeseries analyze \
+  --profile <experiment-id> \
+  --phase warmup:0:30 \
+  --phase steady:30:120 \
+  --straggler-gap 15
+```
+
+Add a DCGM Exporter capture:
+
+```bash
+agoctl timeseries analyze \
+  --profile <experiment-id> \
+  --dcgm-file dcgm.prom \
+  --dcgm-format exporter \
+  --dcgm-interval 1
+```
+
+Or parse `dcgmi dmon` output:
+
+```bash
+agoctl timeseries analyze \
+  --profile <experiment-id> \
+  --dcgm-file dmon.txt \
+  --dcgm-format dmon
+```
+
+Inspect history:
+
+```bash
+agoctl timeseries list
+agoctl timeseries show <report-id>
+```
+
+See [`docs/dcgm-timeseries.md`](docs/dcgm-timeseries.md).
+
 ## Correlate optimizer results with telemetry
 
 Combine a saved optimizer winner with a saved workload profile:
@@ -265,6 +317,9 @@ Native vLLM and distributed PyTorch metric normalization with preserved research
 
 ### v0.7 — Telemetry Correlation
 Offline correlation of optimizer results with GPU telemetry, adapter metrics and optional NCCL baselines.
+
+### v0.8 — DCGM + Time-Series Analysis
+Per-GPU telemetry, DCGM ingestion, phase alignment and persistent straggler analysis.
 
 ### v1.0 — Closed-loop Autopilot
 Guarded observe/diagnose/experiment/optimize/deploy/validate control loop.
