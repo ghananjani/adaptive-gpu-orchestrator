@@ -7,6 +7,14 @@ from pathlib import Path
 
 from adaptive_gpu_orchestrator.benchmarks import NCCLBenchmark, parse_nccl_output
 from adaptive_gpu_orchestrator.doctor import Doctor
+from adaptive_gpu_orchestrator.optimizer import (
+    CommandCanaryRunner,
+    ConfigurationOptimizer,
+    OptimizationConstraints,
+    OptimizationObjective,
+    OptimizationStore,
+    generate_candidates,
+)
 from adaptive_gpu_orchestrator.profiling import ExperimentStore, WorkloadProfiler
 from adaptive_gpu_orchestrator.telemetry import (
     NvidiaSMIProvider,
@@ -91,6 +99,34 @@ def _plain_profile(profile) -> None:
         print(f"Exit code: {profile.exit_code}")
 
 
+def _plain_optimization(result) -> None:
+    feasible = sum(1 for trial in result.trials if trial.feasible)
+    print(
+        f"Optimization: {result.id}  objective={result.objective.value}  "
+        f"trials={len(result.trials)}  feasible={feasible}"
+    )
+    if result.best is None:
+        print("Best: none (no feasible trial had the required objective metric)")
+        return
+
+    best = result.best
+    metrics = best.metrics
+    print(
+        f"Best: {best.config.label()}  world_size={best.config.world_size}  "
+        f"score={best.score:.4f}"
+    )
+    if metrics.throughput_per_s is not None:
+        print(f"  throughput={metrics.throughput_per_s:.3f}/s")
+    if metrics.p99_latency_ms is not None:
+        print(f"  p99_latency={metrics.p99_latency_ms:.3f} ms")
+    if metrics.energy_joules is not None:
+        print(f"  energy={metrics.energy_joules:.3f} J")
+    if metrics.gpu_util_pct is not None:
+        print(f"  gpu_util={metrics.gpu_util_pct:.2f}%")
+    if metrics.memory_pressure_pct is not None:
+        print(f"  memory_pressure={metrics.memory_pressure_pct:.2f}%")
+
+
 def _parse_tags(values: list[str]) -> dict[str, str]:
     tags: dict[str, str] = {}
     for value in values:
@@ -101,6 +137,16 @@ def _parse_tags(values: list[str]) -> dict[str, str]:
             raise ValueError("tag key cannot be empty")
         tags[key] = item
     return tags
+
+
+def _csv_ints(value: str) -> list[int]:
+    try:
+        values = [int(item.strip()) for item in value.split(",") if item.strip()]
+    except ValueError as exc:
+        raise ValueError(f"expected comma-separated integers, got '{value}'") from exc
+    if not values or any(item <= 0 for item in values):
+        raise ValueError("candidate values must be positive integers")
+    return values
 
 
 def _provider(name: str):
@@ -175,6 +221,49 @@ def build_parser() -> argparse.ArgumentParser:
     experiment_sub.add_parser("list", help="list saved profiles")
     show = experiment_sub.add_parser("show", help="show a saved profile")
     show.add_argument("identifier")
+
+    optimize = sub.add_parser(
+        "optimize",
+        help="benchmark candidate parallelism configurations and select the best",
+    )
+    optimize.add_argument("--gpus", type=int, required=True)
+    optimize.add_argument("--tp", default="1,2,4,8")
+    optimize.add_argument("--pp", default="1,2")
+    optimize.add_argument("--dp", default="1")
+    optimize.add_argument("--batch", default="1,2,4,8")
+    optimize.add_argument("--concurrency", default="1,8")
+    optimize.add_argument(
+        "--objective",
+        choices=[item.value for item in OptimizationObjective],
+        default=OptimizationObjective.THROUGHPUT.value,
+    )
+    optimize.add_argument("--exact-world-size", action="store_true")
+    optimize.add_argument("--max-candidates", type=int, default=64)
+    optimize.add_argument("--timeout", type=float, default=120.0)
+    optimize.add_argument("--max-p99-ms", type=float)
+    optimize.add_argument("--max-energy-joules", type=float)
+    optimize.add_argument("--min-throughput", type=float)
+    optimize.add_argument("--max-memory-pressure", type=float)
+    optimize.add_argument("--store-dir", default=".ago/optimizations")
+    optimize.add_argument("--dry-run", action="store_true")
+    optimize.add_argument(
+        "benchmark_command",
+        nargs=argparse.REMAINDER,
+        help="benchmark command after --; must emit one JSON metrics object",
+    )
+
+    optimizations = sub.add_parser(
+        "optimizations",
+        help="inspect saved configuration-optimization runs",
+    )
+    optimizations.add_argument("--store-dir", default=".ago/optimizations")
+    optimization_sub = optimizations.add_subparsers(
+        dest="optimizations_action",
+        required=True,
+    )
+    optimization_sub.add_parser("list", help="list saved optimization runs")
+    optimization_show = optimization_sub.add_parser("show", help="show one run")
+    optimization_show.add_argument("identifier")
 
     return parser
 
@@ -276,6 +365,95 @@ def main(argv: list[str] | None = None) -> int:
 
         profile = store.load(args.identifier)
         _print_json(profile.to_dict()) if args.json else _plain_profile(profile)
+        return 0
+
+    if args.command == "optimize":
+        try:
+            candidates = generate_candidates(
+                available_gpus=args.gpus,
+                tensor_parallel=_csv_ints(args.tp),
+                pipeline_parallel=_csv_ints(args.pp),
+                data_parallel=_csv_ints(args.dp),
+                batch_sizes=_csv_ints(args.batch),
+                concurrencies=_csv_ints(args.concurrency),
+                exact_world_size=args.exact_world_size,
+                max_candidates=args.max_candidates,
+            )
+            if not candidates:
+                raise ValueError("search space produced no valid candidates")
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+        if args.dry_run:
+            payload = [
+                {
+                    **candidate.to_dict(),
+                    "world_size": candidate.world_size,
+                    "label": candidate.label(),
+                }
+                for candidate in candidates
+            ]
+            if args.json:
+                _print_json(payload)
+            else:
+                for candidate in candidates:
+                    print(f"{candidate.label()}  world_size={candidate.world_size}")
+            return 0
+
+        command = list(args.benchmark_command)
+        if command and command[0] == "--":
+            command = command[1:]
+        if not command:
+            print("error: optimize requires a benchmark command after --", file=sys.stderr)
+            return 2
+
+        constraints = OptimizationConstraints(
+            max_p99_latency_ms=args.max_p99_ms,
+            max_energy_joules=args.max_energy_joules,
+            min_throughput_per_s=args.min_throughput,
+            max_memory_pressure_pct=args.max_memory_pressure,
+        )
+        try:
+            result = ConfigurationOptimizer(
+                runner=CommandCanaryRunner(command=command, timeout_s=args.timeout),
+                objective=OptimizationObjective(args.objective),
+                constraints=constraints,
+            ).optimize(candidates, baseline=candidates[0])
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+        store = OptimizationStore(Path(args.store_dir))
+        path = store.save(result)
+        if args.json:
+            payload = result.to_dict()
+            payload["path"] = str(path)
+            _print_json(payload)
+        else:
+            _plain_optimization(result)
+            print(f"Saved: {path}")
+        return 0 if result.best is not None else 3
+
+    if args.command == "optimizations":
+        store = OptimizationStore(Path(args.store_dir))
+        if args.optimizations_action == "list":
+            results = store.list()
+            if args.json:
+                _print_json([result.to_dict() for result in results])
+            else:
+                if not results:
+                    print("No saved optimizations.")
+                for result in results:
+                    best = result.best.config.label() if result.best else "none"
+                    print(
+                        f"{result.id}  objective={result.objective.value}  "
+                        f"trials={len(result.trials)}  best={best}"
+                    )
+            return 0
+
+        result = store.load(args.identifier)
+        _print_json(result.to_dict()) if args.json else _plain_optimization(result)
         return 0
 
     return 2
