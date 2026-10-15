@@ -49,7 +49,7 @@ class WorkloadProfile:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "WorkloadProfile":
+    def from_dict(cls, data: dict[str, Any]) -> WorkloadProfile:
         return cls(
             id=str(data["id"]),
             name=str(data["name"]),
