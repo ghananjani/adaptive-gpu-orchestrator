@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from uuid import uuid4
 
 from adaptive_gpu_orchestrator.optimizer.canary import CanaryRunner
@@ -18,7 +18,7 @@ from adaptive_gpu_orchestrator.optimizer.trials import (
 class ConfigurationOptimizer:
     runner: CanaryRunner
     objective: OptimizationObjective = OptimizationObjective.THROUGHPUT
-    constraints: OptimizationConstraints = OptimizationConstraints()
+    constraints: OptimizationConstraints = field(default_factory=OptimizationConstraints)
 
     def optimize(
         self,
