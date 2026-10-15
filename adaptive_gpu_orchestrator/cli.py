@@ -36,6 +36,13 @@ from adaptive_gpu_orchestrator.telemetry import (
     NvidiaSMIProvider,
     NVMLProvider,
     NVMLUnavailable,
+    parse_dcgm_dmon,
+    parse_dcgm_exporter,
+)
+from adaptive_gpu_orchestrator.timeseries import (
+    PhaseWindow,
+    TimeSeriesStore,
+    analyze_timeseries,
 )
 from adaptive_gpu_orchestrator.validation import (
     ValidationPolicy,
@@ -190,6 +197,58 @@ def _plain_correlation(report) -> None:
         print("\nFindings:")
         for finding in report.findings:
             print(f"  - {finding}")
+
+
+def _plain_timeseries(report) -> None:
+    print(
+        f"Time-series: {report.id}  profile={report.profile_id}  "
+        f"stragglers={report.straggler_gpu_indices or 'none'}"
+    )
+    if report.gpu_summaries:
+        print("\nPer-GPU summary:")
+        for item in report.gpu_summaries:
+            util = (
+                f"{item.gpu_util_mean_pct:.2f}%"
+                if item.gpu_util_mean_pct is not None
+                else "unknown"
+            )
+            gap = (
+                f"{item.straggler_gap_pct_points:.2f}pp"
+                if item.straggler_gap_pct_points is not None
+                else "n/a"
+            )
+            print(
+                f"  - GPU {item.gpu_index}: util={util} "
+                f"straggler_gap={gap} samples={item.sample_count}"
+            )
+    if report.phases:
+        print("\nPhases:")
+        for phase in report.phases:
+            print(
+                f"  - {phase.name}: {phase.start_s:.3f}s-{phase.end_s:.3f}s "
+                f"samples={phase.sample_count}"
+            )
+    if report.findings:
+        print("\nFindings:")
+        for finding in report.findings:
+            print(f"  - {finding}")
+
+
+def _phase_window(value: str) -> PhaseWindow:
+    parts = value.split(":")
+    if len(parts) != 3:
+        raise argparse.ArgumentTypeError(
+            "phase must use NAME:START_SECONDS:END_SECONDS"
+        )
+    name, raw_start, raw_end = parts
+    try:
+        return PhaseWindow(
+            name=name,
+            start_s=float(raw_start),
+            end_s=float(raw_end),
+        )
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError(str(exc)) from exc
 
 
 def _parse_tags(values: list[str]) -> dict[str, str]:
@@ -422,6 +481,59 @@ def build_parser() -> argparse.ArgumentParser:
     correlation_sub.add_parser("list", help="list saved correlation reports")
     correlation_show = correlation_sub.add_parser("show", help="show one report")
     correlation_show.add_argument("identifier")
+
+    timeseries = sub.add_parser(
+        "timeseries",
+        help="analyze and inspect per-GPU workload time series",
+    )
+    timeseries_sub = timeseries.add_subparsers(
+        dest="timeseries_action",
+        required=True,
+    )
+
+    timeseries_analyze = timeseries_sub.add_parser(
+        "analyze",
+        help="analyze a saved workload profile",
+    )
+    timeseries_analyze.add_argument("--profile", required=True)
+    timeseries_analyze.add_argument(
+        "--experiment-store",
+        default=".ago/experiments",
+    )
+    timeseries_analyze.add_argument(
+        "--phase",
+        action="append",
+        type=_phase_window,
+        default=[],
+        metavar="NAME:START:END",
+    )
+    timeseries_analyze.add_argument(
+        "--straggler-gap",
+        type=float,
+        default=15.0,
+        help="mean GPU-utilization gap in percentage points",
+    )
+    timeseries_analyze.add_argument("--dcgm-file")
+    timeseries_analyze.add_argument(
+        "--dcgm-format",
+        choices=("exporter", "dmon"),
+        default="exporter",
+    )
+    timeseries_analyze.add_argument("--dcgm-interval", type=float, default=1.0)
+    timeseries_analyze.add_argument("--store-dir", default=".ago/timeseries")
+
+    timeseries_list = timeseries_sub.add_parser(
+        "list",
+        help="list saved time-series reports",
+    )
+    timeseries_list.add_argument("--store-dir", default=".ago/timeseries")
+
+    timeseries_show = timeseries_sub.add_parser(
+        "show",
+        help="show one saved time-series report",
+    )
+    timeseries_show.add_argument("identifier")
+    timeseries_show.add_argument("--store-dir", default=".ago/timeseries")
 
     return parser
 
@@ -814,6 +926,71 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
         _print_json(report.to_dict()) if args.json else _plain_correlation(report)
+        return 0
+
+    if args.command == "timeseries":
+        store = TimeSeriesStore(Path(args.store_dir))
+
+        if args.timeseries_action == "analyze":
+            try:
+                profile = ExperimentStore(Path(args.experiment_store)).load(
+                    args.profile
+                )
+                dcgm_frames = []
+                if args.dcgm_file:
+                    with open(args.dcgm_file, "r", encoding="utf-8") as handle:
+                        dcgm_text = handle.read()
+                    if args.dcgm_format == "dmon":
+                        dcgm_frames = parse_dcgm_dmon(
+                            dcgm_text,
+                            interval_s=args.dcgm_interval,
+                        )
+                    else:
+                        dcgm_frames = parse_dcgm_exporter(
+                            dcgm_text,
+                            interval_s=args.dcgm_interval,
+                        )
+
+                report = analyze_timeseries(
+                    profile,
+                    phases=args.phase,
+                    dcgm_frames=dcgm_frames,
+                    straggler_gap_pct_points=args.straggler_gap,
+                )
+                path = store.save(report)
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+
+            if args.json:
+                payload = report.to_dict()
+                payload["path"] = str(path)
+                _print_json(payload)
+            else:
+                _plain_timeseries(report)
+                print(f"Saved: {path}")
+            return 0
+
+        if args.timeseries_action == "list":
+            reports = store.list()
+            if args.json:
+                _print_json([report.to_dict() for report in reports])
+            else:
+                if not reports:
+                    print("No saved time-series reports.")
+                for report in reports:
+                    print(
+                        f"{report.id}  profile={report.profile_id}  "
+                        f"stragglers={report.straggler_gpu_indices or 'none'}"
+                    )
+            return 0
+
+        try:
+            report = store.load(args.identifier)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        _print_json(report.to_dict()) if args.json else _plain_timeseries(report)
         return 0
 
     return 2
