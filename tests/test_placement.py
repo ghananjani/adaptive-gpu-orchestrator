@@ -1,5 +1,9 @@
 from adaptive_gpu_orchestrator.models import TopologyLink
-from adaptive_gpu_orchestrator.optimizer import CommunicationEdge, optimize_placement, placement_cost
+from adaptive_gpu_orchestrator.optimizer import (
+    CommunicationEdge,
+    optimize_placement,
+    placement_cost,
+)
 
 
 def test_places_chatty_ranks_on_fast_link():
