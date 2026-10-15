@@ -32,6 +32,7 @@ from adaptive_gpu_orchestrator.optimizer import (
 )
 from adaptive_gpu_orchestrator.profiling import ExperimentStore, WorkloadProfiler
 from adaptive_gpu_orchestrator.schedulers import KubernetesRenderer, SlurmRenderer
+from adaptive_gpu_orchestrator.studies import StudyStore, analyze_study
 from adaptive_gpu_orchestrator.telemetry import (
     NvidiaSMIProvider,
     NVMLProvider,
@@ -232,6 +233,94 @@ def _plain_timeseries(report) -> None:
         print("\nFindings:")
         for finding in report.findings:
             print(f"  - {finding}")
+
+
+def _plain_study(report) -> None:
+    print(f"Study: {report.id}")
+    for group in report.groups:
+        stability = (
+            f"{100.0 * group.config_stability_fraction:.1f}%"
+            if group.config_stability_fraction is not None
+            else "n/a"
+        )
+        print(
+            f"  Group {group.name}: runs={len(group.optimization_ids)} "
+            f"dominant={group.dominant_config or 'none'} stability={stability}"
+        )
+        for metric in (
+            "throughput_per_s",
+            "p99_latency_ms",
+            "energy_joules",
+        ):
+            summary = group.metrics.get(metric)
+            if summary is not None:
+                interval = (
+                    f" [{summary.ci95_low:.3f}, {summary.ci95_high:.3f}]"
+                    if summary.ci95_low is not None
+                    and summary.ci95_high is not None
+                    else ""
+                )
+                print(
+                    f"    {metric}: mean={summary.mean:.3f} n={summary.n}"
+                    f"{interval}"
+                )
+
+    if report.comparisons:
+        print("\nComparisons:")
+        for item in report.comparisons:
+            if item.metric not in {
+                "throughput_per_s",
+                "p99_latency_ms",
+                "energy_joules",
+            }:
+                continue
+            improvement = (
+                f"{item.relative_improvement_pct:+.2f}%"
+                if item.relative_improvement_pct is not None
+                else "n/a"
+            )
+            effect = (
+                f"{item.cohens_d:+.3f}"
+                if item.cohens_d is not None
+                else "n/a"
+            )
+            print(
+                f"  - {item.candidate_group} vs {item.baseline_group} "
+                f"{item.metric}: improvement={improvement} d={effect}"
+            )
+
+    if report.pareto_frontier:
+        print("\nPareto frontier:")
+        for point in report.pareto_frontier:
+            print(
+                f"  - {point.optimization_id} [{point.group}] "
+                f"{point.config_label}"
+            )
+
+    if report.findings:
+        print("\nFindings:")
+        for finding in report.findings:
+            print(f"  - {finding}")
+
+
+def _study_group(value: str) -> tuple[str, tuple[str, ...]]:
+    if "=" not in value:
+        raise argparse.ArgumentTypeError(
+            "study group must use LABEL=RUN_ID,RUN_ID,..."
+        )
+    name, raw_ids = value.split("=", 1)
+    identifiers = tuple(
+        item.strip()
+        for item in raw_ids.split(",")
+        if item.strip()
+    )
+    if not name.strip():
+        raise argparse.ArgumentTypeError("study group label cannot be empty")
+    if not identifiers:
+        raise argparse.ArgumentTypeError(
+            "study group requires at least one optimization id"
+        )
+    return name.strip(), identifiers
 
 
 def _phase_window(value: str) -> PhaseWindow:
@@ -534,6 +623,45 @@ def build_parser() -> argparse.ArgumentParser:
     )
     timeseries_show.add_argument("identifier")
     timeseries_show.add_argument("--store-dir", default=".ago/timeseries")
+
+    study = sub.add_parser(
+        "study",
+        help="analyze repeated optimization runs statistically",
+    )
+    study_sub = study.add_subparsers(
+        dest="study_action",
+        required=True,
+    )
+    study_analyze = study_sub.add_parser(
+        "analyze",
+        help="compare named groups of saved optimization runs",
+    )
+    study_analyze.add_argument(
+        "--group",
+        action="append",
+        type=_study_group,
+        required=True,
+        metavar="LABEL=RUN_ID,RUN_ID",
+    )
+    study_analyze.add_argument(
+        "--optimization-store",
+        default=".ago/optimizations",
+    )
+    study_analyze.add_argument("--store-dir", default=".ago/studies")
+
+    studies = sub.add_parser(
+        "studies",
+        help="inspect persisted statistical study reports",
+    )
+    studies_sub = studies.add_subparsers(
+        dest="studies_action",
+        required=True,
+    )
+    studies_list = studies_sub.add_parser("list", help="list saved studies")
+    studies_list.add_argument("--store-dir", default=".ago/studies")
+    studies_show = studies_sub.add_parser("show", help="show one study")
+    studies_show.add_argument("identifier")
+    studies_show.add_argument("--store-dir", default=".ago/studies")
 
     return parser
 
@@ -991,6 +1119,62 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
         _print_json(report.to_dict()) if args.json else _plain_timeseries(report)
+        return 0
+
+    if args.command == "study":
+        optimization_store = OptimizationStore(
+            Path(args.optimization_store)
+        )
+        groups = {}
+        try:
+            for name, identifiers in args.group:
+                if name in groups:
+                    raise ValueError(
+                        f"duplicate study group label: {name}"
+                    )
+                groups[name] = [
+                    optimization_store.load(identifier)
+                    for identifier in identifiers
+                ]
+
+            report = analyze_study(groups)
+            path = StudyStore(Path(args.store_dir)).save(report)
+        except (FileNotFoundError, ValueError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+        if args.json:
+            payload = report.to_dict()
+            payload["path"] = str(path)
+            _print_json(payload)
+        else:
+            _plain_study(report)
+            print(f"Saved: {path}")
+        return 0
+
+    if args.command == "studies":
+        store = StudyStore(Path(args.store_dir))
+        if args.studies_action == "list":
+            reports = store.list()
+            if args.json:
+                _print_json([report.to_dict() for report in reports])
+            else:
+                if not reports:
+                    print("No saved studies.")
+                for report in reports:
+                    groups = ",".join(
+                        group.name
+                        for group in report.groups
+                    )
+                    print(f"{report.id}  groups={groups}")
+            return 0
+
+        try:
+            report = store.load(args.identifier)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        _print_json(report.to_dict()) if args.json else _plain_study(report)
         return 0
 
     return 2
