@@ -23,8 +23,9 @@ class TrialMetrics:
     memory_pressure_pct: float | None = None
     duration_s: float | None = None
     exit_code: int = 0
+    extras: dict[str, float] = field(default_factory=dict)
 
-    def to_dict(self) -> dict[str, float | int | None]:
+    def to_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod
@@ -41,6 +42,11 @@ class TrialMetrics:
             memory_pressure_pct=optional_float("memory_pressure_pct"),
             duration_s=optional_float("duration_s"),
             exit_code=int(data.get("exit_code", 0)),
+            extras={
+                str(key): float(value)
+                for key, value in data.get("extras", {}).items()
+                if isinstance(value, (int, float))
+            },
         )
 
 
