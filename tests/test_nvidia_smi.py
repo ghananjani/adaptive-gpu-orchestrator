@@ -1,6 +1,5 @@
 from adaptive_gpu_orchestrator.discovery.nvidia_smi import NvidiaSMI
 
-
 QUERY = """0, NVIDIA H100 80GB HBM3, GPU-abc, 81559, 40000, 73, 55, 61, 420.50, 700.00, 00000000:18:00.0, 9.0
 1, NVIDIA H100 80GB HBM3, GPU-def, 81559, 42000, 69, 58, 63, 435.25, 700.00, 00000000:2A:00.0, 9.0
 """
