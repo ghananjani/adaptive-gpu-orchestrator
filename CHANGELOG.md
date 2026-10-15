@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.9.0a0
+
+Statistical Experiment Studies milestone:
+
+- repeated optimization-run grouping
+- Student-t 95% confidence intervals
+- baseline-vs-candidate absolute and percent change
+- direction-aware relative improvement
+- Cohen's d effect size
+- selected-configuration stability
+- adapter-specific metric aggregation
+- throughput/latency/energy Pareto frontier
+- persisted study reports
+- `agoctl study analyze`
+- `agoctl studies list/show`
+- deterministic statistics, persistence and CLI tests
+
 ## 0.8.0a0
 
 DCGM + Time-Series Analysis milestone:
