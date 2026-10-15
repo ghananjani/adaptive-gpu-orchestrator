@@ -18,14 +18,20 @@ class CanaryRunner(Protocol):
 
 @dataclass(slots=True)
 class CommandCanaryRunner:
-    """Runs a benchmark command and parses its final JSON metrics object.
+    """Run a benchmark command and parse its final JSON metrics object.
 
-    The child process receives configuration through environment variables:
-    AGO_TP, AGO_PP, AGO_DP, AGO_BATCH_SIZE, AGO_CONCURRENCY.
+    The child receives both short and descriptive environment variables:
+    AGO_TP / AGO_TENSOR_PARALLEL
+    AGO_PP / AGO_PIPELINE_PARALLEL
+    AGO_DP / AGO_DATA_PARALLEL
+    AGO_BATCH_SIZE
+    AGO_CONCURRENCY
+    AGO_WORLD_SIZE
+    AGO_CONFIG_LABEL
 
-    The benchmark should emit a JSON object containing any supported metrics,
-    for example:
-    {"throughput_per_s": 1200, "p99_latency_ms": 85, "energy_joules": 4200}
+    The benchmark should emit one JSON object containing any supported metrics:
+    throughput_per_s, p99_latency_ms, energy_joules, gpu_util_pct,
+    memory_pressure_pct.
     """
 
     command: list[str]
@@ -38,10 +44,15 @@ class CommandCanaryRunner:
         env.update(
             {
                 "AGO_TP": str(config.tensor_parallel),
+                "AGO_TENSOR_PARALLEL": str(config.tensor_parallel),
                 "AGO_PP": str(config.pipeline_parallel),
+                "AGO_PIPELINE_PARALLEL": str(config.pipeline_parallel),
                 "AGO_DP": str(config.data_parallel),
+                "AGO_DATA_PARALLEL": str(config.data_parallel),
                 "AGO_BATCH_SIZE": str(config.batch_size),
                 "AGO_CONCURRENCY": str(config.concurrency),
+                "AGO_WORLD_SIZE": str(config.world_size),
+                "AGO_CONFIG_LABEL": config.label(),
             }
         )
         return env
