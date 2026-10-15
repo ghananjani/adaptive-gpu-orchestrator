@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.0a0
+
+DCGM + Time-Series Analysis milestone:
+
+- per-GPU telemetry persisted in new workload profiles
+- backward-compatible historical profile loading
+- DCGM Exporter Prometheus parser
+- `dcgmi dmon` parser
+- unknown numeric DCGM metric preservation
+- per-GPU utilization/memory/power/thermal summaries
+- persistent utilization-straggler detection
+- phase-window alignment by profile offset
+- optional DCGM utilization cross-checks
+- persisted time-series reports
+- `agoctl timeseries analyze|list|show`
+- deterministic telemetry, DCGM, analysis, persistence and CLI tests
+
 ## 0.7.0a0
 
 Telemetry Correlation milestone:
