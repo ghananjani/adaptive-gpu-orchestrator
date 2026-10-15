@@ -1,53 +1,50 @@
 # Adaptive GPU Orchestrator for AI Workloads
 
-**An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, continuously profiles GPU workloads, persists experiments, diagnoses bottlenecks, and provides the foundation for closed-loop optimization of distributed AI training and LLM inference.
+**An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles distributed AI workloads, diagnoses bottlenecks, runs controlled canary experiments, and selects better GPU configurations.
 
-> Status: **v0.2 pre-alpha — Workload Intelligence.**
+> Status: **v0.3 pre-alpha — Configuration Optimizer.**
 
-## Why this exists
-
-Modern AI clusters already have schedulers, profilers, metrics stacks, and serving engines. What is still missing is a lightweight layer that connects them into a closed loop:
+## Control loop
 
 **observe → diagnose → experiment → optimize → schedule → validate → learn**
 
-Adaptive GPU Orchestrator is designed to become that layer while remaining scheduler-agnostic and explainable.
+The project deliberately separates measurement, experimentation, and remediation so optimization decisions remain reproducible and explainable.
 
 ## Current capabilities
 
 ### GPU Doctor
-
 - NVIDIA GPU discovery through `nvidia-smi`
-- H100/H200/A100/etc. model, memory, utilization, temperature, power, PCI bus and compute-capability capture
+- H100/H200/A100-class model, memory, utilization, temperature, power and PCI data
 - NVLink/NVSwitch/PCIe topology parsing
-- NCCL `all_reduce_perf` parsing and benchmark execution
-- explainable diagnosis of:
-  - GPU underutilization
-  - memory pressure
-  - communication bottlenecks
-  - load imbalance / stragglers
-  - thermal and power ceilings
-- topology-aware logical-rank placement optimization
+- NCCL benchmark parsing and execution
+- explainable detection of underutilization, memory pressure, communication stalls, imbalance and thermal/power ceilings
+- topology-aware logical-rank placement baseline
 
 ### Workload Intelligence
+- continuous telemetry around arbitrary commands
+- `nvidia-smi` and optional NVML telemetry providers
+- persisted workload profiles under `.ago/experiments`
+- workload-level diagnosis
+- reusable Python profiler API
+- no-GPU CI/development mode
 
-- continuous telemetry sampling around an arbitrary workload
-- dependency-free `nvidia-smi` telemetry provider
-- optional lower-overhead NVML provider via `nvidia-ml-py`
-- workload profiles with duration, command, tags and telemetry time series
-- experiment persistence under `.ago/experiments`
-- workload-level bottleneck diagnosis
-- reusable Python profiling API
-- no-GPU degradation for development and CI
+### Configuration Optimizer
+- search spaces over tensor/pipeline/data parallelism
+- batch-size and concurrency sweeps
+- GPU-budget and exact-world-size validation
+- command-based canary benchmarks
+- SLO constraints for p99 latency, energy, throughput and memory pressure
+- throughput, latency, energy and balanced objectives
+- persisted optimization results under `.ago/optimizations`
+- dry-run search inspection before expensive benchmarking
 
 ## Quick start
-
-Install locally:
 
 ```bash
 pip install -e .
 ```
 
-Inspect a GPU host:
+Inspect and diagnose:
 
 ```bash
 agoctl inspect
@@ -55,77 +52,110 @@ agoctl topology
 agoctl doctor
 ```
 
-Profile an AI workload:
+Profile a workload:
 
 ```bash
 agoctl profile \
   --name llama70b-serving \
   --interval 0.5 \
   --tag model=llama70b \
-  --tag environment=benchmark \
   -- python serve.py
 ```
 
-Or collect a timed observation window without launching a command:
+## Optimize a workload
+
+First inspect the candidate search space without running anything:
 
 ```bash
-agoctl profile --name cluster-baseline --duration 30 --interval 1
+agoctl optimize \
+  --gpus 8 \
+  --tp 1,2,4,8 \
+  --pp 1,2 \
+  --dp 1 \
+  --batch 1,2,4,8 \
+  --concurrency 1,8 \
+  --dry-run
 ```
 
-Use NVML sampling:
+Then run canary benchmarks:
 
 ```bash
-pip install -e '.[nvml]'
-agoctl profile --provider nvml --name training-run -- python train.py
+agoctl optimize \
+  --gpus 8 \
+  --tp 1,2,4,8 \
+  --pp 1,2 \
+  --batch 1,2,4,8 \
+  --concurrency 1,8,32 \
+  --objective balanced \
+  --max-p99-ms 500 \
+  --max-memory-pressure 92 \
+  -- python benchmark.py
 ```
 
-Inspect saved experiments:
+The benchmark receives:
 
-```bash
-agoctl experiments list
-agoctl experiments show <experiment-id>
+```text
+AGO_TP
+AGO_TENSOR_PARALLEL
+AGO_PP
+AGO_PIPELINE_PARALLEL
+AGO_DP
+AGO_DATA_PARALLEL
+AGO_BATCH_SIZE
+AGO_CONCURRENCY
+AGO_WORLD_SIZE
+AGO_CONFIG_LABEL
 ```
 
-Diagnose a previously captured workload:
+It should emit one JSON metrics object on stdout:
 
-```bash
-agoctl doctor --profile <experiment-id>
+```json
+{
+  "throughput_per_s": 14320,
+  "p99_latency_ms": 417,
+  "energy_joules": 4820,
+  "gpu_util_pct": 91.4,
+  "memory_pressure_pct": 87.2
+}
 ```
 
-Machine-readable output is available with the global `--json` flag:
+See [`examples/benchmark_contract.py`](examples/benchmark_contract.py) and
+[`docs/configuration-optimizer.md`](docs/configuration-optimizer.md).
+
+Inspect saved runs:
 
 ```bash
-agoctl --json inspect
-agoctl --json experiments list
+agoctl optimizations list
+agoctl optimizations show <optimization-id>
 ```
 
 ## Python API
 
 ```python
 from adaptive_gpu_orchestrator import (
-    Doctor,
-    ExperimentStore,
-    WorkloadProfiler,
+    ConfigurationOptimizer,
+    OptimizationConstraints,
+    OptimizationObjective,
+    ParallelismConfig,
+)
+from adaptive_gpu_orchestrator.optimizer import CommandCanaryRunner
+
+candidates = [
+    ParallelismConfig(tensor_parallel=2, batch_size=2),
+    ParallelismConfig(tensor_parallel=4, batch_size=4),
+]
+
+optimizer = ConfigurationOptimizer(
+    runner=CommandCanaryRunner(["python", "benchmark.py"]),
+    objective=OptimizationObjective.BALANCED,
+    constraints=OptimizationConstraints(max_p99_latency_ms=500),
 )
 
-profiler = WorkloadProfiler()
-profile = profiler.run(
-    name="llama-inference",
-    command=["python", "serve.py"],
-    duration_s=60,
-    interval_s=1,
-)
-
-store = ExperimentStore()
-store.save(profile)
-
-report = Doctor().diagnose_profile(profile)
-print(report.to_dict())
+result = optimizer.optimize(candidates, baseline=candidates[0])
+print(result.best.to_dict() if result.best else "no feasible configuration")
 ```
 
 ## NCCL benchmark ingestion
-
-If `nccl-tests` is installed:
 
 ```bash
 agoctl benchmark-nccl \
@@ -137,71 +167,41 @@ agoctl benchmark-nccl \
 
 ## Design principles
 
-1. **Measure first.** Automatic remediation without trustworthy observability is dangerous.
-2. **Topology is a first-class input.** A GPU is not interchangeable with every other GPU in a distributed job.
-3. **Explain every recommendation.** The controller should surface evidence, not opaque advice.
-4. **Degrade gracefully.** Developers can run tests and reason about the system without H100 access.
-5. **Automate experiments, not assumptions.** Candidate optimizations should be validated by canary runs.
-6. **Stay scheduler-agnostic.** Kubernetes/Kueue, Slurm, Ray and bare-metal adapters belong behind clean interfaces.
-
-## Planned architecture
-
-```text
-                    ┌──────────────────────────────┐
-                    │      Workload / Operator     │
-                    └──────────────┬───────────────┘
-                                   │
-             ┌─────────────────────▼─────────────────────┐
-             │           Adaptive Control Plane          │
-             │  diagnose · experiment · optimize · learn │
-             └──────────────┬──────────────┬─────────────┘
-                            │              │
-                   ┌────────▼──────┐ ┌────▼───────────┐
-                   │   Telemetry   │ │  Experiment DB │
-                   │ NVML/DCGM/etc │ │ + Baselines    │
-                   └────────┬──────┘ └────┬───────────┘
-                            │              │
-             ┌──────────────▼──────────────▼─────────────┐
-             │              GPU Cluster                  │
-             │ NVLink · NVSwitch · PCIe · InfiniBand    │
-             └───────────────────────────────────────────┘
-```
-
-See [`docs/architecture.md`](docs/architecture.md) for the deeper design.
+1. **Measure first.**
+2. **Topology is a first-class input.**
+3. **Explain every recommendation.**
+4. **Degrade gracefully without GPU hardware.**
+5. **Automate experiments, not assumptions.**
+6. **Keep scheduler integrations behind clean interfaces.**
 
 ## Research directions
 
 - topology-aware placement for distributed LLM workloads
-- automated TP/PP/DP configuration search
+- adaptive TP/PP/DP selection
 - heterogeneous H100/H200 scheduling
-- KV-cache-pressure-aware resource allocation
+- KV-cache-aware resource allocation
 - SLO-aware energy optimization
 - communication/computation overlap prediction
-- runtime detection of stragglers and degraded links
-- learned performance models that avoid exhaustive search
+- learned performance models that reduce search cost
 
 See [`docs/research-roadmap.md`](docs/research-roadmap.md).
 
 ## Roadmap
 
 ### v0.1 — GPU Doctor
-Discovery, topology, NCCL parsing, explainable diagnosis and placement baseline.
+Discovery, topology, NCCL parsing and explainable diagnosis.
 
 ### v0.2 — Workload Intelligence
-Continuous telemetry, workload profiles, optional NVML, experiment persistence and profile diagnosis.
+Continuous telemetry, profiles, NVML support and experiment persistence.
 
 ### v0.3 — Configuration Optimizer
-Automated canaries over batch size, placement, TP/PP/DP and runtime settings.
+Canary search over parallelism, batch/concurrency and multi-objective constraints.
 
 ### v0.4 — Cluster Controller
-Kubernetes/Kueue + Slurm adapters, topology-aware placement and policy engine.
+Kubernetes/Kueue + Slurm adapters and topology-aware policy execution.
 
 ### v1.0 — Closed-loop Autopilot
-Continuous observe/diagnose/experiment/optimize cycle with safety guardrails.
-
-## Contributing
-
-See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Continuous observe/diagnose/experiment/optimize with guarded remediation.
 
 ## License
 
