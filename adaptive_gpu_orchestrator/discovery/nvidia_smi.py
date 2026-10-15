@@ -6,10 +6,11 @@ import re
 import shutil
 import socket
 import subprocess
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from adaptive_gpu_orchestrator.models import ClusterSnapshot, GPUDevice
+
 from .topology import parse_topology_matrix
 
 
