@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.4.0a0
+
+Cluster Controller foundation:
+
+- deployment plan and policy models
+- recommend-only safety default
+- GPU-budget and exact-allocation policy validation
+- topology-aware rank placement reuse
+- Kubernetes `batch/v1 Job` renderer
+- Slurm script renderer
+- corrected Slurm directive ordering
+- node selector and partition support
+- `agoctl plan`
+- planning from direct configuration or saved optimizer winner
+- controller, renderer and CLI tests
+
 ## 0.3.0a0
 
 Configuration Optimizer milestone:
