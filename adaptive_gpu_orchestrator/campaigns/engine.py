@@ -13,7 +13,13 @@ from adaptive_gpu_orchestrator.optimizer import (
 from adaptive_gpu_orchestrator.studies import StudyStore, analyze_study
 
 from .manifest import CampaignManifest
-from .models import CampaignProvenance, CampaignReport, CampaignRun, CampaignSpec
+from .models import (
+    CampaignNCCLBaseline,
+    CampaignProvenance,
+    CampaignReport,
+    CampaignRun,
+    CampaignSpec,
+)
 
 RunnerFactory = Callable[[int, dict[str, str]], CanaryRunner]
 
@@ -177,6 +183,7 @@ def run_campaign(
     optimization_store: OptimizationStore,
     study_store: StudyStore,
     campaign_id: str | None = None,
+    nccl_baseline: CampaignNCCLBaseline | None = None,
 ) -> CampaignReport:
     manifest = CampaignManifest.create(spec)
     report = CampaignReport(
@@ -184,6 +191,7 @@ def run_campaign(
         spec=spec,
         provenance=provenance,
         runs=[],
+        nccl_baseline=nccl_baseline,
         manifest_sha256=manifest.sha256,
     )
 
