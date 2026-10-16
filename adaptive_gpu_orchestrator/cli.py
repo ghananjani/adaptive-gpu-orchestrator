@@ -44,6 +44,11 @@ from adaptive_gpu_orchestrator.evidence import (
     capture_provenance,
     verify_bundle,
 )
+from adaptive_gpu_orchestrator.modeling import (
+    PerformanceModelStore,
+    recommend_experiments,
+    train_performance_model,
+)
 from adaptive_gpu_orchestrator.optimizer import (
     CommandCanaryRunner,
     ConfigurationOptimizer,
@@ -299,6 +304,56 @@ def _plain_autopilot(report) -> None:
     print("\nRollback:")
     for step in report.rollback.steps:
         print(f"  - {step}")
+
+
+def _plain_performance_model(report) -> None:
+    print(
+        f"Performance model: {report.id}  "
+        f"campaigns={len(report.campaign_ids)}  "
+        f"observed_configs={len(report.observed_configs)}"
+    )
+    print(
+        f"Hardware signatures: {len(report.hardware_signatures)}  "
+        f"ridge_lambda={report.ridge_lambda}"
+    )
+    print("\nMetrics:")
+    for name, model in sorted(report.metrics.items()):
+        cv = (
+            f"{model.cv_rmse:.4f}"
+            if model.cv_rmse is not None
+            else "n/a"
+        )
+        r2 = f"{model.r2:.4f}" if model.r2 is not None else "n/a"
+        print(
+            f"  - {name}: n={model.sample_count} "
+            f"distinct={model.distinct_config_count} "
+            f"fit_rmse={model.fit_rmse:.4f} "
+            f"cv_rmse={cv} r2={r2}"
+        )
+    if report.findings:
+        print("\nFindings:")
+        for finding in report.findings:
+            print(f"  - {finding}")
+
+
+def _plain_recommendations(report) -> None:
+    print(
+        f"Recommendations: model={report.model_id}  "
+        f"metric={report.metric}  direction={report.direction}  "
+        f"candidates={report.candidate_count}"
+    )
+    for index, item in enumerate(report.recommendations, start=1):
+        print(
+            f"  {index}. {item.config.label()}  "
+            f"predicted={item.predicted_value:.4f}  "
+            f"score={item.acquisition_score:.4f}  "
+            f"exploit={item.exploitation_score:.4f}  "
+            f"explore={item.exploration_score:.4f}"
+        )
+    if report.findings:
+        print("\nFindings:")
+        for finding in report.findings:
+            print(f"  - {finding}")
 
 
 def _plain_campaign(report) -> None:
@@ -975,6 +1030,86 @@ def build_parser() -> argparse.ArgumentParser:
     )
     autopilot_show.add_argument("identifier")
     autopilot_show.add_argument("--store-dir", default=".ago/autopilot")
+
+    model = sub.add_parser(
+        "model",
+        help="train, inspect and use offline performance models",
+    )
+    model_sub = model.add_subparsers(
+        dest="model_action",
+        required=True,
+    )
+
+    model_train = model_sub.add_parser(
+        "train",
+        help="fit log-linear ridge models from saved campaign trials",
+    )
+    model_train.add_argument("campaigns", nargs="+")
+    model_train.add_argument(
+        "--campaign-store",
+        default=".ago/campaigns",
+    )
+    model_train.add_argument(
+        "--optimization-store",
+        default=".ago/optimizations",
+    )
+    model_train.add_argument("--store-dir", default=".ago/models")
+    model_train.add_argument(
+        "--metric",
+        action="append",
+        default=[],
+        help="metric to fit; may be repeated",
+    )
+    model_train.add_argument("--ridge-lambda", type=float, default=1.0)
+    model_train.add_argument("--min-samples", type=int, default=3)
+    model_train.add_argument(
+        "--allow-mixed-hardware",
+        action="store_true",
+        help="override the default hardware/software provenance guard",
+    )
+
+    model_list = model_sub.add_parser(
+        "list",
+        help="list saved performance models",
+    )
+    model_list.add_argument("--store-dir", default=".ago/models")
+
+    model_show = model_sub.add_parser(
+        "show",
+        help="show one saved performance model",
+    )
+    model_show.add_argument("identifier")
+    model_show.add_argument("--store-dir", default=".ago/models")
+
+    model_recommend = model_sub.add_parser(
+        "recommend",
+        help="rank unmeasured configurations for the next experiment",
+    )
+    model_recommend.add_argument("identifier")
+    model_recommend.add_argument("--metric", default="throughput_per_s")
+    model_recommend.add_argument(
+        "--direction",
+        choices=("maximize", "minimize"),
+    )
+    model_recommend.add_argument("--gpus", type=int, required=True)
+    model_recommend.add_argument("--tp", default="1,2,4,8")
+    model_recommend.add_argument("--pp", default="1,2")
+    model_recommend.add_argument("--dp", default="1")
+    model_recommend.add_argument("--batch", default="1,2,4,8")
+    model_recommend.add_argument("--concurrency", default="1,8")
+    model_recommend.add_argument("--exact-world-size", action="store_true")
+    model_recommend.add_argument("--max-candidates", type=int, default=256)
+    model_recommend.add_argument("--top-k", type=int, default=5)
+    model_recommend.add_argument(
+        "--exploration-weight",
+        type=float,
+        default=0.25,
+    )
+    model_recommend.add_argument(
+        "--include-observed",
+        action="store_true",
+    )
+    model_recommend.add_argument("--store-dir", default=".ago/models")
 
     campaign = sub.add_parser(
         "campaign",
@@ -1858,6 +1993,100 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
         _print_json(report.to_dict()) if args.json else _plain_autopilot(report)
+        return 0
+
+    if args.command == "model":
+        store = PerformanceModelStore(Path(args.store_dir))
+
+        if args.model_action == "train":
+            try:
+                campaign_store = CampaignStore(Path(args.campaign_store))
+                campaigns = [
+                    campaign_store.load(identifier)
+                    for identifier in args.campaigns
+                ]
+                report = train_performance_model(
+                    campaigns,
+                    optimization_store=OptimizationStore(
+                        Path(args.optimization_store)
+                    ),
+                    metrics=(
+                        tuple(args.metric)
+                        if args.metric
+                        else None
+                    ),
+                    ridge_lambda=args.ridge_lambda,
+                    min_samples=args.min_samples,
+                    allow_mixed_hardware=args.allow_mixed_hardware,
+                )
+                path = store.save(report)
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+
+            if args.json:
+                payload = report.to_dict()
+                payload["path"] = str(path)
+                _print_json(payload)
+            else:
+                _plain_performance_model(report)
+                print(f"Saved: {path}")
+            return 0
+
+        if args.model_action == "list":
+            reports = store.list()
+            if args.json:
+                _print_json([report.to_dict() for report in reports])
+            else:
+                if not reports:
+                    print("No saved performance models.")
+                for report in reports:
+                    metrics = ",".join(sorted(report.metrics))
+                    print(
+                        f"{report.id}  campaigns={len(report.campaign_ids)}  "
+                        f"configs={len(report.observed_configs)}  "
+                        f"metrics={metrics}"
+                    )
+            return 0
+
+        if args.model_action == "recommend":
+            try:
+                report = store.load(args.identifier)
+                candidates = generate_candidates(
+                    available_gpus=args.gpus,
+                    tensor_parallel=_csv_ints(args.tp),
+                    pipeline_parallel=_csv_ints(args.pp),
+                    data_parallel=_csv_ints(args.dp),
+                    batch_sizes=_csv_ints(args.batch),
+                    concurrencies=_csv_ints(args.concurrency),
+                    exact_world_size=args.exact_world_size,
+                    max_candidates=args.max_candidates,
+                )
+                recommendation = recommend_experiments(
+                    report,
+                    candidates,
+                    metric=args.metric,
+                    direction=args.direction,
+                    top_k=args.top_k,
+                    exploration_weight=args.exploration_weight,
+                    include_observed=args.include_observed,
+                )
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+
+            if args.json:
+                _print_json(recommendation.to_dict())
+            else:
+                _plain_recommendations(recommendation)
+            return 0
+
+        try:
+            report = store.load(args.identifier)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        _print_json(report.to_dict()) if args.json else _plain_performance_model(report)
         return 0
 
     if args.command == "campaign":
