@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.2.0a0
+
+Multi-node Kubernetes Planning milestone:
+
+- JobSet renderer using `jobset.x-k8s.io/v1alpha2`
+- one replicated worker Job per requested node
+- explicit GPU-per-node requests and limits
+- world-size / node-shape validation
+- deterministic coordinator DNS
+- downward-API JobSet node rank
+- distributed master address and port environment
+- optional Kueue LocalQueue label
+- optional service account
+- Kueue queue label support for single Kubernetes Jobs
+- `agoctl plan --kubernetes-mode jobset`
+- render-only safety boundary preserved
+- deterministic renderer and CLI tests
+
 ## 1.1.0a0
 
 Reproducible Evidence Bundles milestone:
