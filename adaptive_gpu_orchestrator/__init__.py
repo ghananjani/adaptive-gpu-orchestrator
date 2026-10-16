@@ -95,13 +95,13 @@ from .validation import (
 )
 
 __all__ = [
+    "CAMPAIGN_MANIFEST_SCHEMA_VERSION",
     "AdaptedCommandCanaryRunner",
     "AutopilotDecision",
     "AutopilotPolicy",
     "AutopilotReport",
     "AutopilotStore",
     "BundleVerification",
-    "CAMPAIGN_MANIFEST_SCHEMA_VERSION",
     "CampaignManifest",
     "CampaignProvenance",
     "CampaignReport",
@@ -162,10 +162,10 @@ __all__ = [
     "capture_campaign_provenance",
     "capture_provenance",
     "compare_campaigns",
-    "load_campaign_manifest",
     "correlate_optimization",
     "decide_autopilot",
     "diff_plans",
+    "load_campaign_manifest",
     "parse_dcgm_dmon",
     "parse_dcgm_exporter",
     "resume_campaign",
