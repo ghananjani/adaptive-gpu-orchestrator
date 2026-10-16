@@ -10,6 +10,11 @@ from adaptive_gpu_orchestrator.adapters import (
     PyTorchDistributedMetricsAdapter,
     VLLMMetricsAdapter,
 )
+from adaptive_gpu_orchestrator.autopilot import (
+    AutopilotPolicy,
+    AutopilotStore,
+    decide_autopilot,
+)
 from adaptive_gpu_orchestrator.benchmarks import NCCLBenchmark, parse_nccl_output
 from adaptive_gpu_orchestrator.controller import (
     DeploymentPlanner,
@@ -233,6 +238,45 @@ def _plain_timeseries(report) -> None:
         print("\nFindings:")
         for finding in report.findings:
             print(f"  - {finding}")
+
+
+def _plain_autopilot(report) -> None:
+    print(
+        f"Autopilot: {report.id}  decision={report.decision.value}  "
+        f"promotable={report.promotable}"
+    )
+    print(
+        f"Optimizations: {report.baseline_optimization_id} -> "
+        f"{report.candidate_optimization_id}"
+    )
+    print(
+        f"Plan changed: {report.plan_diff.get('changed', False)}  "
+        f"rollback_target={report.rollback.target_config_label}"
+    )
+
+    evidence = []
+    if report.study_id:
+        evidence.append(f"study={report.study_id}")
+    if report.correlation_id:
+        evidence.append(f"correlation={report.correlation_id}")
+    if report.timeseries_id:
+        evidence.append(f"timeseries={report.timeseries_id}")
+    if evidence:
+        print("Evidence: " + "  ".join(evidence))
+
+    if report.reasons:
+        print("\nReasons:")
+        for reason in report.reasons:
+            print(f"  - {reason}")
+
+    if report.warnings:
+        print("\nWarnings:")
+        for warning in report.warnings:
+            print(f"  - {warning}")
+
+    print("\nRollback:")
+    for step in report.rollback.steps:
+        print(f"  - {step}")
 
 
 def _plain_study(report) -> None:
@@ -662,6 +706,106 @@ def build_parser() -> argparse.ArgumentParser:
     studies_show = studies_sub.add_parser("show", help="show one study")
     studies_show.add_argument("identifier")
     studies_show.add_argument("--store-dir", default=".ago/studies")
+
+    autopilot = sub.add_parser(
+        "autopilot",
+        help="make an auditable recommend-only promote/hold/reject decision",
+    )
+    autopilot_sub = autopilot.add_subparsers(
+        dest="autopilot_action",
+        required=True,
+    )
+
+    autopilot_decide = autopilot_sub.add_parser(
+        "decide",
+        help="evaluate a candidate using validation, evidence, and deployment policy",
+    )
+    autopilot_decide.add_argument("--baseline-optimization", required=True)
+    autopilot_decide.add_argument("--candidate-optimization", required=True)
+    autopilot_decide.add_argument(
+        "--backend",
+        choices=[item.value for item in SchedulerBackend],
+        required=True,
+    )
+    autopilot_decide.add_argument("--available-gpus", type=int, required=True)
+    autopilot_decide.add_argument(
+        "--optimization-store",
+        default=".ago/optimizations",
+    )
+    autopilot_decide.add_argument("--study")
+    autopilot_decide.add_argument("--study-store", default=".ago/studies")
+    autopilot_decide.add_argument("--correlation")
+    autopilot_decide.add_argument(
+        "--correlation-store",
+        default=".ago/correlations",
+    )
+    autopilot_decide.add_argument("--timeseries")
+    autopilot_decide.add_argument(
+        "--timeseries-store",
+        default=".ago/timeseries",
+    )
+    autopilot_decide.add_argument("--store-dir", default=".ago/autopilot")
+    autopilot_decide.add_argument("--min-throughput-gain", type=float, default=0.0)
+    autopilot_decide.add_argument("--max-p99-regression", type=float)
+    autopilot_decide.add_argument("--max-energy-regression", type=float)
+    autopilot_decide.add_argument("--max-memory-regression", type=float)
+    autopilot_decide.add_argument("--require-study", action="store_true")
+    autopilot_decide.add_argument("--require-correlation", action="store_true")
+    autopilot_decide.add_argument("--require-timeseries", action="store_true")
+    autopilot_decide.add_argument(
+        "--require-pareto-candidate",
+        action="store_true",
+    )
+    autopilot_decide.add_argument("--min-study-replicates", type=int, default=3)
+    autopilot_decide.add_argument(
+        "--min-config-stability",
+        type=float,
+        default=0.67,
+    )
+    autopilot_decide.add_argument("--allow-stragglers", action="store_true")
+    autopilot_decide.add_argument(
+        "--max-memory-pressure",
+        type=float,
+        default=95.0,
+    )
+    autopilot_decide.add_argument(
+        "--max-temperature",
+        type=float,
+        default=85.0,
+    )
+    autopilot_decide.add_argument(
+        "--allow-equivalent-plan",
+        action="store_true",
+    )
+    autopilot_decide.add_argument("--max-gpus", type=int)
+    autopilot_decide.add_argument(
+        "--require-exact-gpu-count",
+        action="store_true",
+    )
+    autopilot_decide.add_argument(
+        "--node-selector",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+    )
+    autopilot_decide.add_argument(
+        "workload_command",
+        nargs=argparse.REMAINDER,
+        help="workload command after --",
+    )
+
+    autopilot_list = autopilot_sub.add_parser(
+        "list",
+        help="list saved autopilot decisions",
+    )
+    autopilot_list.add_argument("--store-dir", default=".ago/autopilot")
+
+    autopilot_show = autopilot_sub.add_parser(
+        "show",
+        help="show one saved autopilot decision",
+    )
+    autopilot_show.add_argument("identifier")
+    autopilot_show.add_argument("--store-dir", default=".ago/autopilot")
 
     return parser
 
@@ -1175,6 +1319,129 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
         _print_json(report.to_dict()) if args.json else _plain_study(report)
+        return 0
+
+    if args.command == "autopilot":
+        store = AutopilotStore(Path(args.store_dir))
+
+        if args.autopilot_action == "decide":
+            command = list(args.workload_command)
+            if command and command[0] == "--":
+                command = command[1:]
+            if not command:
+                print(
+                    "error: autopilot decide requires a workload command after --",
+                    file=sys.stderr,
+                )
+                return 2
+
+            try:
+                optimization_store = OptimizationStore(
+                    Path(args.optimization_store)
+                )
+                baseline = optimization_store.load(args.baseline_optimization)
+                candidate = optimization_store.load(args.candidate_optimization)
+
+                study = (
+                    StudyStore(Path(args.study_store)).load(args.study)
+                    if args.study
+                    else None
+                )
+                correlation = (
+                    CorrelationStore(Path(args.correlation_store)).load(
+                        args.correlation
+                    )
+                    if args.correlation
+                    else None
+                )
+                timeseries = (
+                    TimeSeriesStore(Path(args.timeseries_store)).load(
+                        args.timeseries
+                    )
+                    if args.timeseries
+                    else None
+                )
+
+                validation_policy = ValidationPolicy(
+                    min_throughput_gain_pct=args.min_throughput_gain,
+                    max_p99_latency_regression_pct=args.max_p99_regression,
+                    max_energy_regression_pct=args.max_energy_regression,
+                    max_memory_pressure_regression_pct=args.max_memory_regression,
+                    rollback_on_reject=True,
+                )
+                autopilot_policy = AutopilotPolicy(
+                    validation=validation_policy,
+                    min_study_replicates=args.min_study_replicates,
+                    min_config_stability=args.min_config_stability,
+                    require_study=args.require_study,
+                    require_correlation=args.require_correlation,
+                    require_timeseries=args.require_timeseries,
+                    require_pareto_candidate=args.require_pareto_candidate,
+                    hold_on_stragglers=not args.allow_stragglers,
+                    max_memory_pressure_pct=args.max_memory_pressure,
+                    max_temperature_c=args.max_temperature,
+                    require_plan_change=not args.allow_equivalent_plan,
+                    recommend_only=True,
+                )
+                deployment_policy = DeploymentPolicy(
+                    max_gpus=args.max_gpus,
+                    require_exact_gpu_count=args.require_exact_gpu_count,
+                    recommend_only=True,
+                )
+
+                report = decide_autopilot(
+                    baseline=baseline,
+                    candidate=candidate,
+                    backend=SchedulerBackend(args.backend),
+                    command=command,
+                    available_gpus=args.available_gpus,
+                    policy=autopilot_policy,
+                    deployment_policy=deployment_policy,
+                    node_selector=_parse_tags(args.node_selector),
+                    study=study,
+                    correlation=correlation,
+                    timeseries=timeseries,
+                )
+                path = store.save(report)
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+
+            if args.json:
+                payload = report.to_dict()
+                payload["path"] = str(path)
+                _print_json(payload)
+            else:
+                _plain_autopilot(report)
+                print(f"Saved: {path}")
+
+            if report.decision.value == "promote":
+                return 0
+            if report.decision.value == "reject":
+                return 3
+            return 4
+
+        if args.autopilot_action == "list":
+            reports = store.list()
+            if args.json:
+                _print_json([report.to_dict() for report in reports])
+            else:
+                if not reports:
+                    print("No saved autopilot decisions.")
+                for report in reports:
+                    print(
+                        f"{report.id}  decision={report.decision.value}  "
+                        f"{report.baseline_optimization_id} -> "
+                        f"{report.candidate_optimization_id}"
+                    )
+            return 0
+
+        try:
+            report = store.load(args.identifier)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        _print_json(report.to_dict()) if args.json else _plain_autopilot(report)
         return 0
 
     return 2
