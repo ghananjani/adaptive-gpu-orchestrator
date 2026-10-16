@@ -5,6 +5,7 @@ from typing import Any
 from uuid import uuid4
 
 from adaptive_gpu_orchestrator.evidence import RuntimeProvenance
+from adaptive_gpu_orchestrator.models import NCCLResult
 from adaptive_gpu_orchestrator.optimizer import (
     OptimizationConstraints,
     OptimizationObjective,
@@ -100,16 +101,96 @@ class CampaignSpec:
 
 
 @dataclass(frozen=True, slots=True)
+class CampaignNCCLBaseline:
+    operation: str
+    results: tuple[NCCLResult, ...]
+    source: str = "nccl-tests"
+    binary: str | None = None
+    begin: str | None = None
+    end: str | None = None
+    factor: int | None = None
+    gpus: int | None = None
+
+    @property
+    def summary(self) -> dict[str, float | int | None]:
+        if not self.results:
+            return {
+                "sample_count": 0,
+                "mean_algbw_gbps": None,
+                "peak_algbw_gbps": None,
+                "mean_busbw_gbps": None,
+                "peak_busbw_gbps": None,
+                "largest_size_bytes": None,
+            }
+        algbw = [item.algbw_gbps for item in self.results]
+        busbw = [item.busbw_gbps for item in self.results]
+        return {
+            "sample_count": len(self.results),
+            "mean_algbw_gbps": sum(algbw) / len(algbw),
+            "peak_algbw_gbps": max(algbw),
+            "mean_busbw_gbps": sum(busbw) / len(busbw),
+            "peak_busbw_gbps": max(busbw),
+            "largest_size_bytes": max(item.size_bytes for item in self.results),
+        }
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "operation": self.operation,
+            "source": self.source,
+            "binary": self.binary,
+            "begin": self.begin,
+            "end": self.end,
+            "factor": self.factor,
+            "gpus": self.gpus,
+            "results": [item.to_dict() for item in self.results],
+            "summary": self.summary,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CampaignNCCLBaseline:
+        return cls(
+            operation=str(data.get("operation", "all_reduce")),
+            source=str(data.get("source", "nccl-tests")),
+            binary=data.get("binary"),
+            begin=data.get("begin"),
+            end=data.get("end"),
+            factor=(
+                None if data.get("factor") is None else int(data["factor"])
+            ),
+            gpus=None if data.get("gpus") is None else int(data["gpus"]),
+            results=tuple(
+                NCCLResult(
+                    operation=str(item.get("operation", "all_reduce")),
+                    size_bytes=int(item["size_bytes"]),
+                    time_us=float(item["time_us"]),
+                    algbw_gbps=float(item["algbw_gbps"]),
+                    busbw_gbps=float(item["busbw_gbps"]),
+                    out_of_place=bool(item.get("out_of_place", True)),
+                )
+                for item in data.get("results", [])
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class CampaignProvenance:
     runtime: RuntimeProvenance
     cluster_snapshot: dict[str, Any]
     package_versions: dict[str, str]
+    cuda_toolkit_version: str | None = None
+    nccl_version: str | None = None
+    container_image: str | None = None
+    container_image_digest: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "runtime": self.runtime.to_dict(),
             "cluster_snapshot": dict(self.cluster_snapshot),
             "package_versions": dict(self.package_versions),
+            "cuda_toolkit_version": self.cuda_toolkit_version,
+            "nccl_version": self.nccl_version,
+            "container_image": self.container_image,
+            "container_image_digest": self.container_image_digest,
         }
 
     @classmethod
@@ -121,6 +202,10 @@ class CampaignProvenance:
                 str(key): str(value)
                 for key, value in data.get("package_versions", {}).items()
             },
+            cuda_toolkit_version=data.get("cuda_toolkit_version"),
+            nccl_version=data.get("nccl_version"),
+            container_image=data.get("container_image"),
+            container_image_digest=data.get("container_image_digest"),
         )
 
 
@@ -158,6 +243,7 @@ class CampaignReport:
     spec: CampaignSpec
     provenance: CampaignProvenance
     runs: list[CampaignRun]
+    nccl_baseline: CampaignNCCLBaseline | None = None
     study_id: str | None = None
     findings: list[str] = field(default_factory=list)
     manifest_sha256: str | None = None
@@ -196,6 +282,11 @@ class CampaignReport:
             "spec": self.spec.to_dict(),
             "provenance": self.provenance.to_dict(),
             "runs": [run.to_dict() for run in self.runs],
+            "nccl_baseline": (
+                self.nccl_baseline.to_dict()
+                if self.nccl_baseline is not None
+                else None
+            ),
             "study_id": self.study_id,
             "findings": list(self.findings),
             "manifest_sha256": self.manifest_sha256,
@@ -218,6 +309,11 @@ class CampaignReport:
                 CampaignRun.from_dict(item)
                 for item in data.get("runs", [])
             ],
+            nccl_baseline=(
+                CampaignNCCLBaseline.from_dict(data["nccl_baseline"])
+                if data.get("nccl_baseline") is not None
+                else None
+            ),
             study_id=data.get("study_id"),
             findings=[
                 str(item)
