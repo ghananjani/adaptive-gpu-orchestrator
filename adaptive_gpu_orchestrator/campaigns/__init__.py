@@ -11,7 +11,7 @@ from .models import (
     CampaignRun,
     CampaignSpec,
 )
-from .provenance import capture_campaign_provenance
+from .provenance import capture_campaign_provenance, probe_runtime_versions
 from .store import CampaignStore
 
 __all__ = [
@@ -25,6 +25,7 @@ __all__ = [
     "capture_campaign_provenance",
     "compare_campaigns",
     "load_campaign_manifest",
+    "probe_runtime_versions",
     "resume_campaign",
     "run_campaign",
     "save_campaign_manifest",
