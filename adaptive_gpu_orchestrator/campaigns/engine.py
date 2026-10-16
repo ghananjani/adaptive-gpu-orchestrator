@@ -139,6 +139,10 @@ def _static_provenance_key(
         "cuda_version": snapshot.get("cuda_version"),
         "gpus": gpu_rows,
         "package_versions": dict(sorted(provenance.package_versions.items())),
+        "cuda_toolkit_version": provenance.cuda_toolkit_version,
+        "nccl_version": provenance.nccl_version,
+        "container_image": provenance.container_image,
+        "container_image_digest": provenance.container_image_digest,
     }
 
 
