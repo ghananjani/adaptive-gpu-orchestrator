@@ -2,7 +2,7 @@
 
 **An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, normalizes native workload metrics, runs canary optimization, and renders safe deployment plans for GPU schedulers.
 
-> Status: **v1.1 alpha — Reproducible Evidence Bundles.**
+> Status: **v1.2 alpha — Multi-node Kubernetes Planning.**
 
 ## Control loop
 
@@ -93,6 +93,19 @@ The controller remains recommend-only: it generates deployment artifacts and pro
 - user-defined reproducibility tags
 - persisted bundles under `.ago/bundles`
 - `agoctl bundle create|list|show|verify`
+
+### Multi-node Kubernetes Planning
+- single-pod `batch/v1 Job` remains the default Kubernetes mode
+- multi-node `jobset.x-k8s.io/v1alpha2 JobSet` rendering
+- one Job per node with explicit GPU-per-node resource requests/limits
+- strict `nodes × GPUs-per-node = world size` validation
+- deterministic coordinator DNS derived from the JobSet name
+- downward-API node-rank exposure from JobSet job-index labels
+- distributed `MASTER_ADDR` / `MASTER_PORT` environment
+- optional Kueue LocalQueue label
+- optional service account
+- node selectors carried into every worker pod
+- render-only safety boundary: no `kubectl apply`
 
 ### Configuration Optimizer
 - TP/PP/DP + batch/concurrency search spaces
@@ -215,6 +228,39 @@ agoctl plan \
 ```
 
 The output is a ready-to-review Slurm script. It is not submitted automatically.
+
+## Render a multi-node Kubernetes JobSet
+
+Use the same optimizer-selected configuration while splitting the world size across multiple nodes:
+
+```bash
+agoctl plan \
+  --backend kubernetes \
+  --available-gpus 8 \
+  --tp 8 \
+  --image myregistry/train:latest \
+  --kubernetes-mode jobset \
+  --nodes 2 \
+  --gpus-per-node 4 \
+  --queue-name gpu-queue \
+  --node-selector accelerator=h100 \
+  -- python train.py
+```
+
+The renderer emits a `jobset.x-k8s.io/v1alpha2` JobSet with two worker Jobs, each requesting four GPUs. It also exposes:
+
+- `AGO_NODE_COUNT`
+- `AGO_GPUS_PER_NODE`
+- `AGO_NODE_RANK` from the JobSet job-index label
+- `AGO_MASTER_ADDR`
+- `MASTER_ADDR`
+- `MASTER_PORT`
+
+If `--gpus-per-node` is omitted, the CLI derives it when the configuration world size is evenly divisible by `--nodes`.
+
+Add `--queue-name <local-queue>` to place the JobSet in a Kueue LocalQueue, and `--service-account-name` when the worker pods need an explicit service account.
+
+See [`docs/multinode-kubernetes.md`](docs/multinode-kubernetes.md).
 
 ## Render a Kubernetes plan
 
@@ -461,6 +507,9 @@ Recommend-only promote/hold/reject orchestration across optimization, statistica
 
 ### v1.1 — Reproducible Evidence Bundles
 Portable integrity-checked decision/evidence bundles with runtime provenance and offline verification.
+
+### v1.2 — Multi-node Kubernetes Planning
+Render-only JobSet/Kueue planning with explicit node/GPU topology and distributed-launcher environment.
 
 ## License
 
