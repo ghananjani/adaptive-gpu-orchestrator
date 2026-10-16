@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from uuid import uuid4
 
 from adaptive_gpu_orchestrator.optimizer import (
     CanaryRunner,
@@ -31,11 +32,7 @@ def run_campaign(
     campaign_id: str | None = None,
 ) -> CampaignReport:
     report = CampaignReport(
-        id=campaign_id or CampaignReport(
-            spec=spec,
-            provenance=provenance,
-            runs=[],
-        ).id,
+        id=campaign_id or uuid4().hex[:12],
         spec=spec,
         provenance=provenance,
         runs=[],
@@ -49,13 +46,13 @@ def run_campaign(
             "AGO_CAMPAIGN_GROUP": spec.group,
             "AGO_REPLICATE_INDEX": str(replicate),
         }
-        env.update(
-            {
-                f"AGO_CAMPAIGN_TAG_{key.upper().replace('-', '_')}": value
-                for key, value in spec.tags.items()
-                if key.replace("-", "_").isalnum()
-            }
-        )
+        for key, value in spec.tags.items():
+            normalized = "".join(
+                character if character.isalnum() else "_"
+                for character in key.upper()
+            ).strip("_")
+            if normalized:
+                env[f"AGO_CAMPAIGN_TAG_{normalized}"] = value
 
         try:
             runner = runner_factory(replicate, env)
