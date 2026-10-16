@@ -149,4 +149,4 @@ __all__ = [
     "validate_trials",
     "verify_bundle",
 ]
-__version__ = "1.1.0a0"
+__version__ = "1.2.0a0"
