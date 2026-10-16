@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any
 
 from adaptive_gpu_orchestrator.optimizer import OptimizationStore
-from .models import CampaignReport
 
+from .models import CampaignReport
 
 _BASE_COLUMNS = (
     "campaign_id",
