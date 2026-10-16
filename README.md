@@ -2,7 +2,7 @@
 
 **An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, normalizes native workload metrics, runs canary optimization, and renders safe deployment plans for GPU schedulers.
 
-> Status: **v1.4 alpha — Campaign Manifests + Resume.**
+> Status: **v1.5 alpha — Communication Baselines + Runtime Provenance.**
 
 ## Control loop
 
@@ -134,6 +134,18 @@ The controller remains recommend-only: it generates deployment artifacts and pro
 - per-replicate candidate-order audit trail
 - manifest fingerprint injected into benchmark environment
 
+### Communication Baselines + Runtime Provenance
+- optional NCCL all-reduce baseline as part of a campaign specification
+- baseline parameters preserved in hash-verified campaign manifests
+- every parsed NCCL point retained in the campaign report
+- canonical SHA-256 fingerprint for the communication baseline
+- mean/max/large-message algorithm and bus-bandwidth summaries
+- campaign comparison findings for NCCL bus-bandwidth deltas
+- CUDA toolkit version probe through `nvcc --version` when available
+- NVIDIA NCCL / CUDA runtime Python package identity when installed
+- runtime versions included in resume provenance compatibility checks
+- `agoctl campaign run --nccl-baseline ...`
+
 ### Configuration Optimizer
 - TP/PP/DP + batch/concurrency search spaces
 - canary benchmarks
@@ -180,6 +192,43 @@ Profile:
 ```bash
 agoctl profile --name llama70b -- python serve.py
 ```
+
+## Add a communication baseline to a campaign
+
+A distributed workload campaign can capture a reproducible NCCL all-reduce baseline before running optimizer replicates:
+
+```bash
+agoctl campaign run \
+  --name h100-llama70b \
+  --group h100 \
+  --repeats 5 \
+  --gpus 8 \
+  --tp 1,2,4,8 \
+  --nccl-baseline \
+  --nccl-binary /opt/nccl-tests/build/all_reduce_perf \
+  --nccl-begin 8M \
+  --nccl-end 1G \
+  --nccl-factor 2 \
+  --nccl-gpus 8 \
+  -- python benchmark.py
+```
+
+The campaign stores:
+
+- every parsed NCCL sample
+- mean/min/max bus bandwidth
+- mean/max algorithm bandwidth
+- the largest-message bus bandwidth
+- the exact baseline command parameters
+- a SHA-256 fingerprint over the baseline specification and measured samples
+
+Because the baseline configuration lives inside `CampaignSpec`, exporting a campaign manifest preserves the same NCCL parameters. Running from that manifest will execute the communication baseline again on the target machine before workload optimization.
+
+Campaign comparison also adds a descriptive NCCL mean-bus-bandwidth delta when both compared campaigns contain baselines. This keeps hardware/application performance comparisons grounded in the communication fabric that was actually measured.
+
+Campaign provenance now records CUDA toolkit identity through `nvcc --version` when available, plus installed NVIDIA NCCL/CUDA runtime Python package versions. These runtime values participate in the resume provenance guard.
+
+See [`docs/communication-baselines.md`](docs/communication-baselines.md).
 
 ## Export and run a campaign manifest
 
@@ -645,6 +694,9 @@ Repeated optimization campaigns with hardware/software provenance and direct cam
 
 ### v1.4 — Campaign Manifests + Resume
 Hash-verified declarative campaign specs, deterministic candidate ordering and provenance-guarded resume of incomplete replicates.
+
+### v1.5 — Communication Baselines + Runtime Provenance
+Fingerprint NCCL communication baselines alongside experiment campaigns and capture CUDA/NCCL runtime identity for stronger cross-hardware comparisons.
 
 ## License
 
