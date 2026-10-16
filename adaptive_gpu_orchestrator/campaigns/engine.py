@@ -4,6 +4,7 @@ import random
 from collections.abc import Callable
 from uuid import uuid4
 
+from adaptive_gpu_orchestrator.benchmarks import NCCLCommunicationBaseline
 from adaptive_gpu_orchestrator.optimizer import (
     CanaryRunner,
     ConfigurationOptimizer,
@@ -133,6 +134,7 @@ def _static_provenance_key(
         "cuda_version": snapshot.get("cuda_version"),
         "gpus": gpu_rows,
         "package_versions": dict(sorted(provenance.package_versions.items())),
+        "runtime_versions": dict(sorted(provenance.runtime_versions.items())),
     }
 
 
@@ -177,6 +179,7 @@ def run_campaign(
     optimization_store: OptimizationStore,
     study_store: StudyStore,
     campaign_id: str | None = None,
+    communication_baseline: NCCLCommunicationBaseline | None = None,
 ) -> CampaignReport:
     manifest = CampaignManifest.create(spec)
     report = CampaignReport(
@@ -185,6 +188,7 @@ def run_campaign(
         provenance=provenance,
         runs=[],
         manifest_sha256=manifest.sha256,
+        communication_baseline=communication_baseline,
     )
 
     for replicate in range(1, spec.repeats + 1):
@@ -289,5 +293,32 @@ def compare_campaigns(
         ]
 
     study = analyze_study(groups)
+
+    baseline_campaign = campaigns[0]
+    baseline_nccl = baseline_campaign.communication_baseline
+    if baseline_nccl is not None:
+        baseline_bus = baseline_nccl.summary.get("busbw_mean_gbps")
+        for campaign in campaigns[1:]:
+            candidate_nccl = campaign.communication_baseline
+            if candidate_nccl is None:
+                continue
+            candidate_bus = candidate_nccl.summary.get("busbw_mean_gbps")
+            if (
+                isinstance(baseline_bus, (int, float))
+                and baseline_bus != 0
+                and isinstance(candidate_bus, (int, float))
+            ):
+                change = (
+                    (float(candidate_bus) - float(baseline_bus))
+                    / float(baseline_bus)
+                    * 100.0
+                )
+                study.findings.append(
+                    f"NCCL mean bus bandwidth {campaign.spec.group} vs "
+                    f"{baseline_campaign.spec.group}: {change:+.2f}% "
+                    f"({float(baseline_bus):.2f} -> "
+                    f"{float(candidate_bus):.2f} GB/s)"
+                )
+
     study_store.save(study)
     return study
