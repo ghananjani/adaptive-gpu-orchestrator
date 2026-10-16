@@ -15,7 +15,12 @@ from adaptive_gpu_orchestrator.autopilot import (
     AutopilotStore,
     decide_autopilot,
 )
-from adaptive_gpu_orchestrator.benchmarks import NCCLBenchmark, parse_nccl_output
+from adaptive_gpu_orchestrator.benchmarks import (
+    NCCLBaselineSpec,
+    NCCLBenchmark,
+    capture_nccl_baseline,
+    parse_nccl_output,
+)
 from adaptive_gpu_orchestrator.campaigns import (
     CampaignSpec,
     CampaignStore,
@@ -348,11 +353,37 @@ def _plain_campaign(report) -> None:
         )
 
     if report.provenance.package_versions:
-        print("\nSoftware:")
+        print("\nSoftware packages:")
         for name, version in sorted(
             report.provenance.package_versions.items()
         ):
             print(f"  - {name}={version}")
+
+    if report.provenance.runtime_versions:
+        print("\nRuntime versions:")
+        for name, version in sorted(
+            report.provenance.runtime_versions.items()
+        ):
+            print(f"  - {name}={version}")
+
+    if report.communication_baseline is not None:
+        summary = report.communication_baseline.summary
+        print("\nNCCL communication baseline:")
+        print(
+            "  - mean bus bandwidth: "
+            f"{float(summary['busbw_mean_gbps']):.2f} GB/s"
+        )
+        print(
+            "  - max bus bandwidth: "
+            f"{float(summary['busbw_max_gbps']):.2f} GB/s"
+        )
+        print(
+            "  - largest-message bus bandwidth: "
+            f"{float(summary['largest_message_busbw_gbps']):.2f} GB/s"
+        )
+        print(
+            f"  - sha256={report.communication_baseline.sha256}"
+        )
 
     if report.findings:
         print("\nFindings:")
@@ -1002,6 +1033,16 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
     )
     campaign_run.add_argument("--random-seed", type=int)
+    campaign_run.add_argument(
+        "--nccl-baseline",
+        action="store_true",
+        help="run and persist an NCCL all-reduce communication baseline",
+    )
+    campaign_run.add_argument("--nccl-binary", default="all_reduce_perf")
+    campaign_run.add_argument("--nccl-begin", default="8M")
+    campaign_run.add_argument("--nccl-end", default="1G")
+    campaign_run.add_argument("--nccl-factor", type=int, default=2)
+    campaign_run.add_argument("--nccl-gpus", type=int)
     campaign_run.add_argument(
         "--optimization-store",
         default=".ago/optimizations",
@@ -1815,6 +1856,10 @@ def main(argv: list[str] | None = None) -> int:
                         raise ValueError(
                             "--tag cannot override a hash-verified manifest"
                         )
+                    if args.nccl_baseline:
+                        raise ValueError(
+                            "--nccl-baseline cannot override a hash-verified manifest"
+                        )
                     manifest = load_campaign_manifest(args.manifest)
                     spec = manifest.spec
                 else:
@@ -1866,10 +1911,30 @@ def main(argv: list[str] | None = None) -> int:
                         timeout_s=args.timeout,
                         randomize_candidates=args.randomize_candidates,
                         random_seed=args.random_seed,
+                        nccl_baseline=(
+                            NCCLBaselineSpec(
+                                binary=args.nccl_binary,
+                                begin=args.nccl_begin,
+                                end=args.nccl_end,
+                                factor=args.nccl_factor,
+                                gpus=(
+                                    args.nccl_gpus
+                                    if args.nccl_gpus is not None
+                                    else args.gpus
+                                ),
+                            )
+                            if args.nccl_baseline
+                            else None
+                        ),
                         tags=tags,
                     )
 
                 provenance = capture_campaign_provenance(tags=spec.tags)
+                communication_baseline = (
+                    capture_nccl_baseline(spec.nccl_baseline)
+                    if spec.nccl_baseline is not None
+                    else None
+                )
                 report = run_campaign(
                     spec=spec,
                     provenance=provenance,
@@ -1878,9 +1943,10 @@ def main(argv: list[str] | None = None) -> int:
                         Path(args.optimization_store)
                     ),
                     study_store=StudyStore(Path(args.study_store)),
+                    communication_baseline=communication_baseline,
                 )
                 path = store.save(report)
-            except (FileNotFoundError, ValueError) as exc:
+            except (FileNotFoundError, RuntimeError, ValueError) as exc:
                 print(f"error: {exc}", file=sys.stderr)
                 return 2
 
