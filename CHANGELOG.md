@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.0.0a0
+
+Recommend-only Closed-Loop Autopilot milestone:
+
+- promote / hold / reject decision model
+- strict guarded-validation integration
+- recommend-only deployment-policy enforcement
+- baseline and candidate deployment-plan generation
+- plan diff included in every decision
+- optional statistical-study evidence gates
+- optional correlation evidence gates
+- optional per-GPU time-series evidence gates
+- Pareto candidate requirement
+- minimum replicate and config-stability requirements
+- straggler, memory-pressure and thermal hold conditions
+- explicit operator-controlled rollback plan
+- persisted autopilot reports under `.ago/autopilot`
+- `agoctl autopilot decide|list|show`
+- deterministic engine, persistence and CLI tests
+- no automatic Kubernetes or Slurm mutation
+
 ## 0.9.0a0
 
 Statistical Experiment Studies milestone:
