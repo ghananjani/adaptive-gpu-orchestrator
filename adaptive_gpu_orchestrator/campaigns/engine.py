@@ -10,7 +10,6 @@ from adaptive_gpu_orchestrator.optimizer import (
     OptimizationStore,
 )
 from adaptive_gpu_orchestrator.studies import StudyStore, analyze_study
-
 from .models import CampaignProvenance, CampaignReport, CampaignRun, CampaignSpec
 
 
