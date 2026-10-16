@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from uuid import uuid4
 from collections.abc import Callable
+from uuid import uuid4
 
 from adaptive_gpu_orchestrator.optimizer import (
     CanaryRunner,
