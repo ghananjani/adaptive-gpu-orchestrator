@@ -11,7 +11,7 @@ def benchmark_command(throughput):
         (
             "import json; "
             f"print(json.dumps({{'throughput_per_s': {throughput}, "
-            "'p99_latency_ms': 100.0, 'energy_joules': 1000.0}}))"
+            "'p99_latency_ms': 100.0, 'energy_joules': 1000.0}))"
         ),
     ]
 
