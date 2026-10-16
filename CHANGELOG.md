@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.5.0a0
+
+Campaign Baselines + Research Export milestone:
+
+- optional campaign-level NCCL all-reduce baseline
+- saved nccl-tests output ingestion
+- direct nccl-tests execution before campaign replicates
+- raw NCCL samples plus mean/peak algorithm and bus bandwidth
+- explicit CUDA toolkit provenance
+- explicit/detected NCCL version provenance
+- optional container image and digest provenance
+- richer provenance included in resume compatibility checks
+- trial-level campaign flattening
+- CSV research export
+- JSONL research export
+- adapter-native `extra_*` metric columns
+- NCCL/provenance fields included in exported rows
+- `agoctl campaign export`
+- deterministic baseline, provenance, export and CLI tests
+- existing campaign manifest schema remains unchanged and compatible
+
 ## 1.4.0a0
 
 Campaign Manifests + Resume milestone:
