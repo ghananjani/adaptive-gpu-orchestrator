@@ -2,7 +2,7 @@
 
 **An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, normalizes native workload metrics, runs canary optimization, and renders safe deployment plans for GPU schedulers.
 
-> Status: **v1.5 alpha — Campaign Baselines + Research Export.**
+> Status: **v1.6 alpha — Performance Modeling + Experiment Recommendation.**
 
 ## Control loop
 
@@ -146,6 +146,21 @@ The controller remains recommend-only: it generates deployment artifacts and pro
 - adapter-native metrics exported as `extra_*` columns
 - CSV and JSONL output through `agoctl campaign export`
 
+### Performance Modeling + Experiment Recommendation
+- dependency-free log-linear ridge regression over TP/PP/DP/batch/concurrency
+- trains from every successful optimizer trial in saved campaigns
+- per-metric fit RMSE / MAE / R²
+- deterministic leave-one-out CV RMSE / MAE when enough samples exist
+- default metrics: throughput, p99 latency, energy and memory pressure
+- custom exported metrics such as `extra_ttft_ms` can be modeled explicitly
+- hardware/software provenance signatures are guarded by default
+- mixed-platform training requires an explicit override
+- saved models under `.ago/models`
+- next-experiment ranking over generated candidate spaces
+- acquisition score = predicted objective quality + configuration-space exploration
+- exploration is a heuristic distance from measured configurations, not calibrated uncertainty
+- `agoctl model train|list|show|recommend`
+
 ### Configuration Optimizer
 - TP/PP/DP + batch/concurrency search spaces
 - canary benchmarks
@@ -192,6 +207,48 @@ Profile:
 ```bash
 agoctl profile --name llama70b -- python serve.py
 ```
+
+## Train a performance model and recommend the next experiment
+
+Train from one or more saved campaigns that share the same hardware/software signature:
+
+```bash
+agoctl model train \
+  <campaign-id> \
+  --metric throughput_per_s \
+  --metric p99_latency_ms
+```
+
+The first v1.6 model is deliberately interpretable: it fits ridge-regularized linear relationships in log2 TP/PP/DP/batch/concurrency space. This is useful for scaling surfaces while remaining auditable from the saved model coefficients.
+
+Inspect the model:
+
+```bash
+agoctl model show <model-id>
+```
+
+Rank unmeasured configurations without running them:
+
+```bash
+agoctl model recommend <model-id> \
+  --metric throughput_per_s \
+  --gpus 8 \
+  --tp 1,2,4,8 \
+  --pp 1,2 \
+  --dp 1 \
+  --batch 1,2,4,8 \
+  --concurrency 1,8 \
+  --top-k 5 \
+  --exploration-weight 0.25
+```
+
+By default, configurations already present in the training data are excluded. The acquisition score combines normalized predicted objective quality with distance from previously measured configurations.
+
+The exploration term is **not a probabilistic uncertainty estimate**. A high exploration score means a point is far from measured configurations in the standardized log-configuration feature space and should be treated as extrapolation.
+
+The model is config-only in v1.6. Hardware/software provenance is therefore a guard rather than a predictive feature. Training across H100 and H200 campaigns is rejected by default; use separate models for scientifically cleaner hardware comparison. The explicit `--allow-mixed-hardware` flag exists only for controlled experiments where the user accepts that platform effects may be conflated.
+
+See [`docs/performance-modeling.md`](docs/performance-modeling.md).
 
 ## Capture an NCCL campaign baseline and export research data
 
@@ -711,6 +768,9 @@ Hash-verified declarative campaign specs, deterministic candidate ordering and p
 
 ### v1.5 — Campaign Baselines + Research Export
 Campaign-level NCCL baselines, richer CUDA/NCCL/container provenance, and trial-level CSV/JSONL export for reproducible research analysis.
+
+### v1.6 — Performance Modeling + Experiment Recommendation
+Interpretable campaign-trained scaling models with provenance guards and recommend-only next-experiment ranking over unmeasured configurations.
 
 ## License
 

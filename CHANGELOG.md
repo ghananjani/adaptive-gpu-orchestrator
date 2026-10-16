@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.6.0a0
+
+Performance Modeling + Experiment Recommendation milestone:
+
+- dependency-free log-linear ridge performance model
+- TP / PP / DP / batch / concurrency feature space
+- train from every successful saved campaign trial
+- default throughput, p99 latency, energy and memory-pressure targets
+- explicit custom metric support
+- per-metric fit RMSE / MAE / R²
+- deterministic leave-one-out CV RMSE / MAE
+- hardware/software provenance signature guard
+- explicit mixed-hardware override
+- persisted performance models under `.ago/models`
+- recommend-only next-experiment ranking
+- configurable exploit/explore acquisition weighting
+- measured configurations excluded by default
+- exploration based on standardized configuration-space distance
+- no claim of calibrated predictive uncertainty
+- `agoctl model train|list|show|recommend`
+- no GPU, scheduler or benchmark mutation from model recommendation
+- deterministic modeling, provenance-guard, persistence and CLI tests
+
 ## 1.5.0a0
 
 Campaign Baselines + Research Export milestone:
