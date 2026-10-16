@@ -156,10 +156,8 @@ def train_performance_model(
         ),
     )
     findings.append(
-        (
-            "recommendation exploration uses distance from measured "
-            "configurations as a heuristic, not calibrated uncertainty"
-        )
+        "recommendation exploration uses distance from measured "
+        "configurations as a heuristic, not calibrated uncertainty"
     )
     if len(hardware_signatures) > 1:
         findings.append(
