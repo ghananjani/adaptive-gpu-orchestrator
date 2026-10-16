@@ -42,7 +42,11 @@ from adaptive_gpu_orchestrator.optimizer import (
     generate_candidates,
 )
 from adaptive_gpu_orchestrator.profiling import ExperimentStore, WorkloadProfiler
-from adaptive_gpu_orchestrator.schedulers import KubernetesRenderer, SlurmRenderer
+from adaptive_gpu_orchestrator.schedulers import (
+    KubernetesJobSetRenderer,
+    KubernetesRenderer,
+    SlurmRenderer,
+)
 from adaptive_gpu_orchestrator.studies import StudyStore, analyze_study
 from adaptive_gpu_orchestrator.telemetry import (
     NvidiaSMIProvider,
@@ -594,8 +598,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     plan.add_argument("--image")
     plan.add_argument("--job-name", default="ago-workload")
+    plan.add_argument(
+        "--kubernetes-mode",
+        choices=("job", "jobset"),
+        default="job",
+        help="render a single-pod Job or multi-node JobSet",
+    )
     plan.add_argument("--nodes", type=int, default=1)
     plan.add_argument("--gpus-per-node", type=int)
+    plan.add_argument("--queue-name")
+    plan.add_argument("--master-port", type=int, default=29500)
+    plan.add_argument("--service-account-name")
     plan.add_argument("--partition")
     plan.add_argument(
         "workload_command",
@@ -1154,10 +1167,48 @@ def main(argv: list[str] | None = None) -> int:
             if backend is SchedulerBackend.KUBERNETES:
                 if not args.image:
                     raise ValueError("--image is required for Kubernetes plans")
-                artifact = KubernetesRenderer(
-                    image=args.image,
-                    job_name=args.job_name,
-                ).render(deployment)
+
+                if args.kubernetes_mode == "jobset":
+                    if args.nodes <= 0:
+                        raise ValueError("--nodes must be positive")
+                    if args.gpus_per_node is None:
+                        if config.world_size % args.nodes != 0:
+                            raise ValueError(
+                                "world size must be divisible by --nodes when "
+                                "--gpus-per-node is omitted"
+                            )
+                        gpus_per_node = config.world_size // args.nodes
+                    else:
+                        gpus_per_node = args.gpus_per_node
+
+                    artifact = KubernetesJobSetRenderer(
+                        image=args.image,
+                        job_name=args.job_name,
+                        nodes=args.nodes,
+                        gpus_per_node=gpus_per_node,
+                        queue_name=args.queue_name,
+                        master_port=args.master_port,
+                        service_account_name=args.service_account_name,
+                    ).render(deployment)
+                else:
+                    if args.nodes != 1:
+                        raise ValueError(
+                            "single-pod Kubernetes Job requires --nodes 1; "
+                            "use --kubernetes-mode jobset for multi-node plans"
+                        )
+                    if (
+                        args.gpus_per_node is not None
+                        and args.gpus_per_node != config.world_size
+                    ):
+                        raise ValueError(
+                            "single-pod Kubernetes Job requires --gpus-per-node "
+                            "to match the configuration world size"
+                        )
+                    artifact = KubernetesRenderer(
+                        image=args.image,
+                        job_name=args.job_name,
+                        queue_name=args.queue_name,
+                    ).render(deployment)
             else:
                 artifact = SlurmRenderer(
                     job_name=args.job_name,
