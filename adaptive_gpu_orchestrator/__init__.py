@@ -16,17 +16,20 @@ from .autopilot import (
 from .campaigns import (
     CAMPAIGN_MANIFEST_SCHEMA_VERSION,
     CampaignManifest,
+    CampaignNCCLBaseline,
     CampaignProvenance,
     CampaignReport,
     CampaignRun,
     CampaignSpec,
     CampaignStore,
+    campaign_trial_rows,
     capture_campaign_provenance,
     compare_campaigns,
     load_campaign_manifest,
     resume_campaign,
     run_campaign,
     save_campaign_manifest,
+    write_campaign_export,
 )
 from .controller import DeploymentPlan, DeploymentPlanner, DeploymentPolicy, SchedulerBackend
 from .correlation import (
@@ -103,6 +106,7 @@ __all__ = [
     "AutopilotStore",
     "BundleVerification",
     "CampaignManifest",
+    "CampaignNCCLBaseline",
     "CampaignProvenance",
     "CampaignReport",
     "CampaignRun",
@@ -158,6 +162,7 @@ __all__ = [
     "analyze_study",
     "analyze_timeseries",
     "build_evidence_bundle",
+    "campaign_trial_rows",
     "canonical_json",
     "capture_campaign_provenance",
     "capture_provenance",
@@ -176,5 +181,6 @@ __all__ = [
     "summarize_nccl",
     "validate_trials",
     "verify_bundle",
+    "write_campaign_export",
 ]
-__version__ = "1.4.0a0"
+__version__ = "1.5.0a0"
