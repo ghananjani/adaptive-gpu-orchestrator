@@ -21,6 +21,18 @@ from .correlation import (
     summarize_nccl,
 )
 from .doctor import Doctor
+from .evidence import (
+    BundleVerification,
+    EvidenceArtifact,
+    EvidenceBundle,
+    EvidenceBundleStore,
+    RuntimeProvenance,
+    build_evidence_bundle,
+    canonical_json,
+    capture_provenance,
+    sha256_payload,
+    verify_bundle,
+)
 from .models import ClusterSnapshot, DiagnosisReport, GPUDevice, TopologyLink
 from .optimizer import (
     ConfigurationOptimizer,
@@ -73,6 +85,7 @@ __all__ = [
     "AutopilotPolicy",
     "AutopilotReport",
     "AutopilotStore",
+    "BundleVerification",
     "ClusterSnapshot",
     "ConfigurationOptimizer",
     "CorrelationReport",
@@ -85,6 +98,9 @@ __all__ = [
     "DeviceTelemetry",
     "DiagnosisReport",
     "Doctor",
+    "EvidenceArtifact",
+    "EvidenceBundle",
+    "EvidenceBundleStore",
     "ExperimentStore",
     "GPUDevice",
     "GPUTimeSeriesSummary",
@@ -100,6 +116,7 @@ __all__ = [
     "PlanDiff",
     "PyTorchDistributedMetricsAdapter",
     "RollbackPlan",
+    "RuntimeProvenance",
     "SchedulerBackend",
     "StudyGroupSummary",
     "StudyReport",
@@ -118,13 +135,18 @@ __all__ = [
     "WorkloadProfiler",
     "analyze_study",
     "analyze_timeseries",
+    "build_evidence_bundle",
+    "canonical_json",
+    "capture_provenance",
     "correlate_optimization",
     "decide_autopilot",
     "diff_plans",
     "parse_dcgm_dmon",
     "parse_dcgm_exporter",
+    "sha256_payload",
     "summarize_dcgm",
     "summarize_nccl",
     "validate_trials",
+    "verify_bundle",
 ]
-__version__ = "1.0.0a0"
+__version__ = "1.1.0a0"
