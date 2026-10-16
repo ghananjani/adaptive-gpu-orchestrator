@@ -121,6 +121,22 @@ class AutopilotReport:
     def from_dict(cls, data: dict[str, Any]) -> AutopilotReport:
         policy_data = dict(data.get("policy", {}))
         validation_data = dict(policy_data.pop("validation", {}))
+
+        plan_diff = dict(data["plan_diff"])
+        changes = dict(plan_diff.get("changes", {}))
+        rank_change = changes.get("rank_to_gpu")
+        if isinstance(rank_change, dict):
+            normalized_rank_change = dict(rank_change)
+            for side in ("before", "after"):
+                mapping = normalized_rank_change.get(side)
+                if isinstance(mapping, dict):
+                    normalized_rank_change[side] = {
+                        int(key) if str(key).isdigit() else key: value
+                        for key, value in mapping.items()
+                    }
+            changes["rank_to_gpu"] = normalized_rank_change
+        plan_diff["changes"] = changes
+
         return cls(
             id=str(data["id"]),
             baseline_optimization_id=str(data["baseline_optimization_id"]),
@@ -133,7 +149,7 @@ class AutopilotReport:
             validation=ValidationReport.from_dict(data["validation"]),
             baseline_plan=dict(data["baseline_plan"]),
             candidate_plan=dict(data["candidate_plan"]),
-            plan_diff=dict(data["plan_diff"]),
+            plan_diff=plan_diff,
             rollback=RollbackPlan.from_dict(data["rollback"]),
             study_id=data.get("study_id"),
             correlation_id=data.get("correlation_id"),
