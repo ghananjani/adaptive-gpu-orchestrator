@@ -11,12 +11,7 @@ from adaptive_gpu_orchestrator.optimizer import (
 )
 from adaptive_gpu_orchestrator.studies import StudyStore, analyze_study
 
-from .models import (
-    CampaignProvenance,
-    CampaignReport,
-    CampaignRun,
-    CampaignSpec,
-)
+from .models import CampaignProvenance, CampaignReport, CampaignRun, CampaignSpec
 
 
 RunnerFactory = Callable[[int, dict[str, str]], CanaryRunner]
