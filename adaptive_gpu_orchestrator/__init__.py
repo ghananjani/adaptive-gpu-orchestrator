@@ -5,6 +5,14 @@ from .adapters import (
     PyTorchDistributedMetricsAdapter,
     VLLMMetricsAdapter,
 )
+from .autopilot import (
+    AutopilotDecision,
+    AutopilotPolicy,
+    AutopilotReport,
+    AutopilotStore,
+    RollbackPlan,
+    decide_autopilot,
+)
 from .controller import DeploymentPlan, DeploymentPlanner, DeploymentPolicy, SchedulerBackend
 from .correlation import (
     CorrelationReport,
@@ -61,6 +69,10 @@ from .validation import (
 
 __all__ = [
     "AdaptedCommandCanaryRunner",
+    "AutopilotDecision",
+    "AutopilotPolicy",
+    "AutopilotReport",
+    "AutopilotStore",
     "ClusterSnapshot",
     "ConfigurationOptimizer",
     "CorrelationReport",
@@ -87,6 +99,7 @@ __all__ = [
     "PhaseWindow",
     "PlanDiff",
     "PyTorchDistributedMetricsAdapter",
+    "RollbackPlan",
     "SchedulerBackend",
     "StudyGroupSummary",
     "StudyReport",
@@ -104,6 +117,7 @@ __all__ = [
     "WorkloadProfile",
     "WorkloadProfiler",
     "analyze_study",
+    "decide_autopilot",
     "analyze_timeseries",
     "correlate_optimization",
     "diff_plans",
@@ -113,4 +127,4 @@ __all__ = [
     "summarize_nccl",
     "validate_trials",
 ]
-__version__ = "0.9.0a0"
+__version__ = "1.0.0a0"
