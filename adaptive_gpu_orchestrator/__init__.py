@@ -14,6 +14,8 @@ from .autopilot import (
     decide_autopilot,
 )
 from .campaigns import (
+    CAMPAIGN_MANIFEST_SCHEMA_VERSION,
+    CampaignManifest,
     CampaignProvenance,
     CampaignReport,
     CampaignRun,
@@ -21,7 +23,10 @@ from .campaigns import (
     CampaignStore,
     capture_campaign_provenance,
     compare_campaigns,
+    load_campaign_manifest,
+    resume_campaign,
     run_campaign,
+    save_campaign_manifest,
 )
 from .controller import DeploymentPlan, DeploymentPlanner, DeploymentPolicy, SchedulerBackend
 from .correlation import (
@@ -90,12 +95,14 @@ from .validation import (
 )
 
 __all__ = [
+    "CAMPAIGN_MANIFEST_SCHEMA_VERSION",
     "AdaptedCommandCanaryRunner",
     "AutopilotDecision",
     "AutopilotPolicy",
     "AutopilotReport",
     "AutopilotStore",
     "BundleVerification",
+    "CampaignManifest",
     "CampaignProvenance",
     "CampaignReport",
     "CampaignRun",
@@ -158,13 +165,16 @@ __all__ = [
     "correlate_optimization",
     "decide_autopilot",
     "diff_plans",
+    "load_campaign_manifest",
     "parse_dcgm_dmon",
     "parse_dcgm_exporter",
+    "resume_campaign",
     "run_campaign",
+    "save_campaign_manifest",
     "sha256_payload",
     "summarize_dcgm",
     "summarize_nccl",
     "validate_trials",
     "verify_bundle",
 ]
-__version__ = "1.3.0a0"
+__version__ = "1.4.0a0"

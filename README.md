@@ -2,7 +2,7 @@
 
 **An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, normalizes native workload metrics, runs canary optimization, and renders safe deployment plans for GPU schedulers.
 
-> Status: **v1.3 alpha — Experiment Campaigns + Hardware/Software Provenance.**
+> Status: **v1.4 alpha — Campaign Manifests + Resume.**
 
 ## Control loop
 
@@ -120,6 +120,20 @@ The controller remains recommend-only: it generates deployment artifacts and pro
 - persisted reports under `.ago/campaigns`
 - `agoctl campaign run|list|show|compare`
 
+### Campaign Manifests + Resume
+- canonical JSON campaign manifests with schema versioning
+- SHA-256 fingerprint over the complete campaign specification
+- tamper detection before manifest-driven execution
+- `agoctl campaign run --manifest ...`
+- `agoctl campaign manifest <id> --output ...`
+- resumable campaigns that preserve completed optimization IDs
+- rerun only incomplete / failed replicates
+- hardware/software provenance guard before resume
+- explicit `--allow-provenance-change` override with audited resume provenance
+- deterministic candidate-order randomization from a recorded seed
+- per-replicate candidate-order audit trail
+- manifest fingerprint injected into benchmark environment
+
 ### Configuration Optimizer
 - TP/PP/DP + batch/concurrency search spaces
 - canary benchmarks
@@ -166,6 +180,58 @@ Profile:
 ```bash
 agoctl profile --name llama70b -- python serve.py
 ```
+
+## Export and run a campaign manifest
+
+Export the exact specification from a saved campaign:
+
+```bash
+agoctl campaign manifest <campaign-id> \
+  --output experiments/h100-llama70b.json
+```
+
+The JSON contains a schema version, complete campaign specification and canonical SHA-256 fingerprint. Editing any hashed field without updating the fingerprint makes manifest loading fail.
+
+Run directly from the manifest:
+
+```bash
+agoctl campaign run \
+  --manifest experiments/h100-llama70b.json
+```
+
+This reuses the recorded benchmark command, search candidates, objective, constraints, adapter, timeout, tags and deterministic randomization settings.
+
+To randomize candidate execution order while keeping the experiment reproducible:
+
+```bash
+agoctl campaign run \
+  --name h100-llama70b \
+  --group h100 \
+  --repeats 5 \
+  --gpus 8 \
+  --tp 1,2,4,8 \
+  --randomize-candidates \
+  --random-seed 20261016 \
+  -- python benchmark.py
+```
+
+Each replicate derives a deterministic shuffle from the recorded seed and stores the actual candidate-label order in its run record.
+
+Resume an interrupted or partially failed campaign:
+
+```bash
+agoctl campaign resume <campaign-id>
+```
+
+Completed replicates are never rerun. Before resume, the controller compares static hardware/software provenance: GPU model/count/memory/compute capability, driver, CUDA and tracked ML package versions. A mismatch blocks resume unless the operator explicitly uses:
+
+```bash
+agoctl campaign resume <campaign-id> --allow-provenance-change
+```
+
+The changed resume provenance is then retained in the campaign audit trail.
+
+See [`docs/campaign-manifests-resume.md`](docs/campaign-manifests-resume.md).
 
 ## Run a reproducible experiment campaign
 
@@ -576,6 +642,9 @@ Render-only JobSet/Kueue planning with explicit node/GPU topology and distribute
 
 ### v1.3 — Experiment Campaigns + Provenance
 Repeated optimization campaigns with hardware/software provenance and direct campaign-to-campaign statistical comparison.
+
+### v1.4 — Campaign Manifests + Resume
+Hash-verified declarative campaign specs, deterministic candidate ordering and provenance-guarded resume of incomplete replicates.
 
 ## License
 
