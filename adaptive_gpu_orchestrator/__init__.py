@@ -13,6 +13,16 @@ from .autopilot import (
     RollbackPlan,
     decide_autopilot,
 )
+from .campaigns import (
+    CampaignProvenance,
+    CampaignReport,
+    CampaignRun,
+    CampaignSpec,
+    CampaignStore,
+    capture_campaign_provenance,
+    compare_campaigns,
+    run_campaign,
+)
 from .controller import DeploymentPlan, DeploymentPlanner, DeploymentPolicy, SchedulerBackend
 from .correlation import (
     CorrelationReport,
@@ -86,6 +96,11 @@ __all__ = [
     "AutopilotReport",
     "AutopilotStore",
     "BundleVerification",
+    "CampaignProvenance",
+    "CampaignReport",
+    "CampaignRun",
+    "CampaignSpec",
+    "CampaignStore",
     "ClusterSnapshot",
     "ConfigurationOptimizer",
     "CorrelationReport",
@@ -137,16 +152,19 @@ __all__ = [
     "analyze_timeseries",
     "build_evidence_bundle",
     "canonical_json",
+    "capture_campaign_provenance",
     "capture_provenance",
+    "compare_campaigns",
     "correlate_optimization",
     "decide_autopilot",
     "diff_plans",
     "parse_dcgm_dmon",
     "parse_dcgm_exporter",
+    "run_campaign",
     "sha256_payload",
     "summarize_dcgm",
     "summarize_nccl",
     "validate_trials",
     "verify_bundle",
 ]
-__version__ = "1.2.0a0"
+__version__ = "1.3.0a0"

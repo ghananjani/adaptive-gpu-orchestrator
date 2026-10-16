@@ -1,0 +1,180 @@
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from typing import Any
+from uuid import uuid4
+
+from adaptive_gpu_orchestrator.evidence import RuntimeProvenance
+from adaptive_gpu_orchestrator.optimizer import (
+    OptimizationConstraints,
+    OptimizationObjective,
+    ParallelismConfig,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class CampaignSpec:
+    name: str
+    group: str
+    repeats: int
+    available_gpus: int
+    candidates: tuple[ParallelismConfig, ...]
+    objective: OptimizationObjective
+    constraints: OptimizationConstraints
+    adapter: str
+    benchmark_command: tuple[str, ...]
+    timeout_s: float = 120.0
+    tags: dict[str, str] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if not self.name.strip():
+            raise ValueError("campaign name cannot be empty")
+        if not self.group.strip():
+            raise ValueError("campaign group cannot be empty")
+        if self.repeats <= 0:
+            raise ValueError("campaign repeats must be positive")
+        if self.available_gpus <= 0:
+            raise ValueError("available_gpus must be positive")
+        if not self.candidates:
+            raise ValueError("campaign requires at least one candidate")
+        if not self.benchmark_command:
+            raise ValueError("campaign benchmark command cannot be empty")
+        if self.timeout_s <= 0:
+            raise ValueError("campaign timeout must be positive")
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "name": self.name,
+            "group": self.group,
+            "repeats": self.repeats,
+            "available_gpus": self.available_gpus,
+            "candidates": [candidate.to_dict() for candidate in self.candidates],
+            "objective": self.objective.value,
+            "constraints": self.constraints.to_dict(),
+            "adapter": self.adapter,
+            "benchmark_command": list(self.benchmark_command),
+            "timeout_s": self.timeout_s,
+            "tags": dict(self.tags),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CampaignSpec:
+        return cls(
+            name=str(data["name"]),
+            group=str(data["group"]),
+            repeats=int(data["repeats"]),
+            available_gpus=int(data["available_gpus"]),
+            candidates=tuple(
+                ParallelismConfig.from_dict(item)
+                for item in data.get("candidates", [])
+            ),
+            objective=OptimizationObjective(data["objective"]),
+            constraints=OptimizationConstraints(**data.get("constraints", {})),
+            adapter=str(data.get("adapter", "generic")),
+            benchmark_command=tuple(
+                str(item)
+                for item in data.get("benchmark_command", [])
+            ),
+            timeout_s=float(data.get("timeout_s", 120.0)),
+            tags={
+                str(key): str(value)
+                for key, value in data.get("tags", {}).items()
+            },
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CampaignProvenance:
+    runtime: RuntimeProvenance
+    cluster_snapshot: dict[str, Any]
+    package_versions: dict[str, str]
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "runtime": self.runtime.to_dict(),
+            "cluster_snapshot": dict(self.cluster_snapshot),
+            "package_versions": dict(self.package_versions),
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CampaignProvenance:
+        return cls(
+            runtime=RuntimeProvenance.from_dict(data["runtime"]),
+            cluster_snapshot=dict(data.get("cluster_snapshot", {})),
+            package_versions={
+                str(key): str(value)
+                for key, value in data.get("package_versions", {}).items()
+            },
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class CampaignRun:
+    replicate: int
+    status: str
+    optimization_id: str | None = None
+    best_config: str | None = None
+    error: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CampaignRun:
+        return cls(
+            replicate=int(data["replicate"]),
+            status=str(data["status"]),
+            optimization_id=data.get("optimization_id"),
+            best_config=data.get("best_config"),
+            error=data.get("error"),
+        )
+
+
+@dataclass(slots=True)
+class CampaignReport:
+    spec: CampaignSpec
+    provenance: CampaignProvenance
+    runs: list[CampaignRun]
+    study_id: str | None = None
+    findings: list[str] = field(default_factory=list)
+    id: str = field(default_factory=lambda: uuid4().hex[:12])
+
+    @property
+    def completed_optimization_ids(self) -> tuple[str, ...]:
+        return tuple(
+            run.optimization_id
+            for run in self.runs
+            if run.status == "completed" and run.optimization_id is not None
+        )
+
+    @property
+    def successful_replicates(self) -> int:
+        return len(self.completed_optimization_ids)
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "id": self.id,
+            "spec": self.spec.to_dict(),
+            "provenance": self.provenance.to_dict(),
+            "runs": [run.to_dict() for run in self.runs],
+            "study_id": self.study_id,
+            "findings": list(self.findings),
+            "successful_replicates": self.successful_replicates,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> CampaignReport:
+        return cls(
+            id=str(data["id"]),
+            spec=CampaignSpec.from_dict(data["spec"]),
+            provenance=CampaignProvenance.from_dict(data["provenance"]),
+            runs=[
+                CampaignRun.from_dict(item)
+                for item in data.get("runs", [])
+            ],
+            study_id=data.get("study_id"),
+            findings=[
+                str(item)
+                for item in data.get("findings", [])
+            ],
+        )

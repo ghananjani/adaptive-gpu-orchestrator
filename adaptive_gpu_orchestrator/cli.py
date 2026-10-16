@@ -16,6 +16,13 @@ from adaptive_gpu_orchestrator.autopilot import (
     decide_autopilot,
 )
 from adaptive_gpu_orchestrator.benchmarks import NCCLBenchmark, parse_nccl_output
+from adaptive_gpu_orchestrator.campaigns import (
+    CampaignSpec,
+    CampaignStore,
+    capture_campaign_provenance,
+    compare_campaigns,
+    run_campaign,
+)
 from adaptive_gpu_orchestrator.controller import (
     DeploymentPlanner,
     DeploymentPolicy,
@@ -287,6 +294,61 @@ def _plain_autopilot(report) -> None:
     print("\nRollback:")
     for step in report.rollback.steps:
         print(f"  - {step}")
+
+
+def _plain_campaign(report) -> None:
+    snapshot = report.provenance.cluster_snapshot
+    gpus = snapshot.get("gpus", [])
+    gpu_names = sorted(
+        {
+            str(item.get("name"))
+            for item in gpus
+            if item.get("name")
+        }
+    )
+    print(
+        f"Campaign: {report.id}  name={report.spec.name}  "
+        f"group={report.spec.group}"
+    )
+    print(
+        f"Replicates: {report.successful_replicates}/{report.spec.repeats}  "
+        f"adapter={report.spec.adapter}  "
+        f"objective={report.spec.objective.value}"
+    )
+    print(
+        f"Hardware: GPUs={len(gpus)}  "
+        f"models={','.join(gpu_names) if gpu_names else 'unknown'}  "
+        f"driver={snapshot.get('driver_version') or 'unknown'}  "
+        f"cuda={snapshot.get('cuda_version') or 'unknown'}"
+    )
+    if report.study_id:
+        print(f"Study: {report.study_id}")
+
+    print("\nRuns:")
+    for run in report.runs:
+        details = []
+        if run.optimization_id:
+            details.append(f"optimization={run.optimization_id}")
+        if run.best_config:
+            details.append(f"best={run.best_config}")
+        if run.error:
+            details.append(f"error={run.error}")
+        suffix = "  " + "  ".join(details) if details else ""
+        print(
+            f"  - replicate={run.replicate} status={run.status}{suffix}"
+        )
+
+    if report.provenance.package_versions:
+        print("\nSoftware:")
+        for name, version in sorted(
+            report.provenance.package_versions.items()
+        ):
+            print(f"  - {name}={version}")
+
+    if report.findings:
+        print("\nFindings:")
+        for finding in report.findings:
+            print(f"  - {finding}")
 
 
 def _plain_bundle(bundle, verification=None) -> None:
@@ -858,6 +920,88 @@ def build_parser() -> argparse.ArgumentParser:
     )
     autopilot_show.add_argument("identifier")
     autopilot_show.add_argument("--store-dir", default=".ago/autopilot")
+
+    campaign = sub.add_parser(
+        "campaign",
+        help="run and compare reproducible repeated optimization campaigns",
+    )
+    campaign_sub = campaign.add_subparsers(
+        dest="campaign_action",
+        required=True,
+    )
+
+    campaign_run = campaign_sub.add_parser(
+        "run",
+        help="run repeated optimizer replicates with captured provenance",
+    )
+    campaign_run.add_argument("--name", required=True)
+    campaign_run.add_argument("--group", required=True)
+    campaign_run.add_argument("--repeats", type=int, default=3)
+    campaign_run.add_argument("--gpus", type=int, required=True)
+    campaign_run.add_argument("--tp", default="1,2,4,8")
+    campaign_run.add_argument("--pp", default="1,2")
+    campaign_run.add_argument("--dp", default="1")
+    campaign_run.add_argument("--batch", default="1,2,4,8")
+    campaign_run.add_argument("--concurrency", default="1,8")
+    campaign_run.add_argument(
+        "--objective",
+        choices=[item.value for item in OptimizationObjective],
+        default=OptimizationObjective.THROUGHPUT.value,
+    )
+    campaign_run.add_argument(
+        "--adapter",
+        choices=("generic", "vllm", "pytorch-distributed"),
+        default="generic",
+    )
+    campaign_run.add_argument("--exact-world-size", action="store_true")
+    campaign_run.add_argument("--max-candidates", type=int, default=64)
+    campaign_run.add_argument("--timeout", type=float, default=120.0)
+    campaign_run.add_argument("--max-p99-ms", type=float)
+    campaign_run.add_argument("--max-energy-joules", type=float)
+    campaign_run.add_argument("--min-throughput", type=float)
+    campaign_run.add_argument("--max-memory-pressure", type=float)
+    campaign_run.add_argument(
+        "--optimization-store",
+        default=".ago/optimizations",
+    )
+    campaign_run.add_argument("--study-store", default=".ago/studies")
+    campaign_run.add_argument("--store-dir", default=".ago/campaigns")
+    campaign_run.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+    )
+    campaign_run.add_argument(
+        "benchmark_command",
+        nargs=argparse.REMAINDER,
+        help="benchmark command after --; must emit one JSON metrics object",
+    )
+
+    campaign_list = campaign_sub.add_parser(
+        "list",
+        help="list saved campaigns",
+    )
+    campaign_list.add_argument("--store-dir", default=".ago/campaigns")
+
+    campaign_show = campaign_sub.add_parser(
+        "show",
+        help="show one saved campaign",
+    )
+    campaign_show.add_argument("identifier")
+    campaign_show.add_argument("--store-dir", default=".ago/campaigns")
+
+    campaign_compare = campaign_sub.add_parser(
+        "compare",
+        help="build a statistical study from completed campaign replicates",
+    )
+    campaign_compare.add_argument("identifiers", nargs="+")
+    campaign_compare.add_argument("--store-dir", default=".ago/campaigns")
+    campaign_compare.add_argument(
+        "--optimization-store",
+        default=".ago/optimizations",
+    )
+    campaign_compare.add_argument("--study-store", default=".ago/studies")
 
     bundle = sub.add_parser(
         "bundle",
@@ -1589,6 +1733,150 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
         _print_json(report.to_dict()) if args.json else _plain_autopilot(report)
+        return 0
+
+    if args.command == "campaign":
+        store = CampaignStore(Path(args.store_dir))
+
+        if args.campaign_action == "run":
+            command = list(args.benchmark_command)
+            if command and command[0] == "--":
+                command = command[1:]
+            if not command:
+                print(
+                    "error: campaign run requires a benchmark command after --",
+                    file=sys.stderr,
+                )
+                return 2
+
+            try:
+                candidates = generate_candidates(
+                    available_gpus=args.gpus,
+                    tensor_parallel=_csv_ints(args.tp),
+                    pipeline_parallel=_csv_ints(args.pp),
+                    data_parallel=_csv_ints(args.dp),
+                    batch_sizes=_csv_ints(args.batch),
+                    concurrencies=_csv_ints(args.concurrency),
+                    exact_world_size=args.exact_world_size,
+                    max_candidates=args.max_candidates,
+                )
+                if not candidates:
+                    raise ValueError(
+                        "campaign search space produced no valid candidates"
+                    )
+
+                tags = _parse_tags(args.tag)
+                constraints = OptimizationConstraints(
+                    max_p99_latency_ms=args.max_p99_ms,
+                    max_energy_joules=args.max_energy_joules,
+                    min_throughput_per_s=args.min_throughput,
+                    max_memory_pressure_pct=args.max_memory_pressure,
+                )
+                spec = CampaignSpec(
+                    name=args.name,
+                    group=args.group,
+                    repeats=args.repeats,
+                    available_gpus=args.gpus,
+                    candidates=tuple(candidates),
+                    objective=OptimizationObjective(args.objective),
+                    constraints=constraints,
+                    adapter=args.adapter,
+                    benchmark_command=tuple(command),
+                    timeout_s=args.timeout,
+                    tags=tags,
+                )
+                provenance = capture_campaign_provenance(tags=tags)
+
+                def runner_factory(replicate, campaign_env):
+                    if args.adapter == "vllm":
+                        return AdaptedCommandCanaryRunner(
+                            adapter=VLLMMetricsAdapter(),
+                            command=command,
+                            timeout_s=args.timeout,
+                            extra_env=campaign_env,
+                        )
+                    if args.adapter == "pytorch-distributed":
+                        return AdaptedCommandCanaryRunner(
+                            adapter=PyTorchDistributedMetricsAdapter(),
+                            command=command,
+                            timeout_s=args.timeout,
+                            extra_env=campaign_env,
+                        )
+                    return CommandCanaryRunner(
+                        command=command,
+                        timeout_s=args.timeout,
+                        extra_env=campaign_env,
+                    )
+
+                report = run_campaign(
+                    spec=spec,
+                    provenance=provenance,
+                    runner_factory=runner_factory,
+                    optimization_store=OptimizationStore(
+                        Path(args.optimization_store)
+                    ),
+                    study_store=StudyStore(Path(args.study_store)),
+                )
+                path = store.save(report)
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+
+            if args.json:
+                payload = report.to_dict()
+                payload["path"] = str(path)
+                _print_json(payload)
+            else:
+                _plain_campaign(report)
+                print(f"Saved: {path}")
+            return 0 if report.successful_replicates else 3
+
+        if args.campaign_action == "list":
+            reports = store.list()
+            if args.json:
+                _print_json([report.to_dict() for report in reports])
+            else:
+                if not reports:
+                    print("No saved campaigns.")
+                for report in reports:
+                    print(
+                        f"{report.id}  name={report.spec.name}  "
+                        f"group={report.spec.group}  "
+                        f"replicates={report.successful_replicates}/"
+                        f"{report.spec.repeats}"
+                    )
+            return 0
+
+        if args.campaign_action == "compare":
+            try:
+                campaigns = [
+                    store.load(identifier)
+                    for identifier in args.identifiers
+                ]
+                study = compare_campaigns(
+                    campaigns,
+                    optimization_store=OptimizationStore(
+                        Path(args.optimization_store)
+                    ),
+                    study_store=StudyStore(Path(args.study_store)),
+                )
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+
+            if args.json:
+                _print_json(study.to_dict())
+            else:
+                _plain_study(study)
+                print(f"Saved study: {args.study_store}/{study.id}.json")
+            return 0
+
+        try:
+            report = store.load(args.identifier)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+        _print_json(report.to_dict()) if args.json else _plain_campaign(report)
         return 0
 
     if args.command == "bundle":

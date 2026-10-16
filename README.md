@@ -2,7 +2,7 @@
 
 **An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, normalizes native workload metrics, runs canary optimization, and renders safe deployment plans for GPU schedulers.
 
-> Status: **v1.2 alpha — Multi-node Kubernetes Planning.**
+> Status: **v1.3 alpha — Experiment Campaigns + Hardware/Software Provenance.**
 
 ## Control loop
 
@@ -107,6 +107,19 @@ The controller remains recommend-only: it generates deployment artifacts and pro
 - node selectors carried into every worker pod
 - render-only safety boundary: no `kubectl apply`
 
+### Experiment Campaigns
+- repeated optimizer runs under one campaign identity
+- campaign-level search specification, adapter, objective, constraints and command
+- per-replicate optimization persistence
+- automatic one-group statistical study for completed replicates
+- direct campaign-to-campaign statistical comparison
+- GPU inventory, driver and CUDA provenance from the existing discovery layer
+- Python/runtime/git provenance
+- installed ML-system package versions when available
+- user-defined tags propagated into campaign metadata and benchmark environment
+- persisted reports under `.ago/campaigns`
+- `agoctl campaign run|list|show|compare`
+
 ### Configuration Optimizer
 - TP/PP/DP + batch/concurrency search spaces
 - canary benchmarks
@@ -153,6 +166,56 @@ Profile:
 ```bash
 agoctl profile --name llama70b -- python serve.py
 ```
+
+## Run a reproducible experiment campaign
+
+A campaign repeats the existing optimizer search while preserving the exact search space, command, environment tags and hardware/software provenance:
+
+```bash
+agoctl campaign run \
+  --name h100-llama70b \
+  --group h100 \
+  --repeats 5 \
+  --gpus 8 \
+  --tp 1,2,4,8 \
+  --pp 1,2 \
+  --batch 1,2,4,8 \
+  --adapter vllm \
+  --objective balanced \
+  --max-p99-ms 500 \
+  --tag hardware=h100 \
+  --tag model=llama70b \
+  -- python benchmark_vllm.py
+```
+
+Every replicate is stored as a normal optimization result. The campaign also records GPU model/count, driver, CUDA version, runtime/git metadata and installed package versions such as PyTorch, vLLM and Triton when present.
+
+The benchmark child process receives:
+
+```text
+AGO_CAMPAIGN_ID
+AGO_CAMPAIGN_NAME
+AGO_CAMPAIGN_GROUP
+AGO_REPLICATE_INDEX
+AGO_CAMPAIGN_TAG_<TAG>
+```
+
+Compare two completed campaigns directly:
+
+```bash
+agoctl campaign compare <h100-campaign-id> <h200-campaign-id>
+```
+
+The comparison reuses the existing statistical-study engine, so the first campaign is the baseline group and later campaigns are compared with confidence intervals, direction-aware improvements, effect sizes, config-selection stability and Pareto analysis.
+
+Inspect history:
+
+```bash
+agoctl campaign list
+agoctl campaign show <campaign-id>
+```
+
+See [`docs/experiment-campaigns.md`](docs/experiment-campaigns.md).
 
 ## Optimize native vLLM benchmark output
 
@@ -510,6 +573,9 @@ Portable integrity-checked decision/evidence bundles with runtime provenance and
 
 ### v1.2 — Multi-node Kubernetes Planning
 Render-only JobSet/Kueue planning with explicit node/GPU topology and distributed-launcher environment.
+
+### v1.3 — Experiment Campaigns + Provenance
+Repeated optimization campaigns with hardware/software provenance and direct campaign-to-campaign statistical comparison.
 
 ## License
 

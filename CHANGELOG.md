@@ -1,5 +1,24 @@
 # Changelog
 
+## 1.3.0a0
+
+Experiment Campaigns + Hardware/Software Provenance milestone:
+
+- repeated optimizer campaigns
+- campaign specification model
+- per-replicate status and optimization IDs
+- automatic one-group statistical study
+- campaign-to-campaign study comparison
+- GPU inventory provenance
+- driver and CUDA provenance
+- runtime, package-version and git provenance
+- campaign benchmark environment variables
+- user-defined campaign tags
+- persisted campaign reports under `.ago/campaigns`
+- `agoctl campaign run|list|show|compare`
+- deterministic campaign, provenance, persistence and CLI tests
+- no scheduler mutation or background execution
+
 ## 1.2.0a0
 
 Multi-node Kubernetes Planning milestone:
