@@ -7,6 +7,7 @@ from .manifest import (
     save_campaign_manifest,
 )
 from .models import (
+    CampaignNCCLBaseline,
     CampaignProvenance,
     CampaignReport,
     CampaignRun,
