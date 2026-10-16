@@ -57,6 +57,7 @@ def decide_autopilot(
     command: list[str],
     available_gpus: int,
     policy: AutopilotPolicy | None = None,
+    deployment_policy: DeploymentPolicy | None = None,
     node_selector: dict[str, str] | None = None,
     study: StudyReport | None = None,
     correlation: CorrelationReport | None = None,
@@ -73,12 +74,14 @@ def decide_autopilot(
     if available_gpus <= 0:
         raise ValueError("available_gpus must be positive")
 
-    deployment_policy = DeploymentPolicy(
+    active_deployment_policy = deployment_policy or DeploymentPolicy(
         max_gpus=available_gpus,
         require_exact_gpu_count=False,
         recommend_only=True,
     )
-    planner = DeploymentPlanner(deployment_policy)
+    if not active_deployment_policy.recommend_only:
+        raise ValueError("v1.0 autopilot cannot use a mutating deployment policy")
+    planner = DeploymentPlanner(active_deployment_policy)
 
     baseline_plan = planner.plan(
         config=baseline.best.config,
