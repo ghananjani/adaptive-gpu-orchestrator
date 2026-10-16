@@ -41,8 +41,10 @@ def _rollback_plan(
         steps=(
             "Keep scheduler mutation disabled in the autopilot process.",
             "Review the stored baseline deployment plan and candidate plan diff.",
-            f"Restore the baseline configuration {baseline_label} through an "
-            "operator-controlled Kubernetes or Slurm workflow.",
+            (
+                f"Restore the baseline configuration {baseline_label} through an "
+                "operator-controlled Kubernetes or Slurm workflow."
+            ),
             "Re-run workload telemetry and guarded validation after rollback.",
             "Persist the rollback evidence before considering another promotion.",
         ),
