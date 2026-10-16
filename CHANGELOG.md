@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.5.0a0
+
+Communication Baselines + Runtime Provenance milestone:
+
+- first-class NCCL baseline specification
+- fingerprinted NCCL communication-baseline artifact
+- shared NCCL summary statistics
+- optional campaign NCCL all-reduce baseline
+- baseline configuration preserved in campaign manifests
+- all parsed NCCL samples retained
+- mean/min/max bus-bandwidth summary
+- mean/max algorithm-bandwidth summary
+- largest-message bandwidth summary
+- communication-baseline delta findings in campaign comparisons
+- CUDA toolkit probing through `nvcc --version`
+- NVIDIA NCCL/CUDA runtime package identity when available
+- runtime versions included in resume provenance compatibility
+- `agoctl campaign run --nccl-baseline`
+- deterministic baseline, runtime-probe, campaign and CLI tests
+
 ## 1.4.0a0
 
 Campaign Manifests + Resume milestone:
