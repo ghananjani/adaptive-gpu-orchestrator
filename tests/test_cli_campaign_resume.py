@@ -1,5 +1,4 @@
 import json
-import os
 import sys
 
 from adaptive_gpu_orchestrator.cli import main
