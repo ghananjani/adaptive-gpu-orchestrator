@@ -1,5 +1,26 @@
 # Changelog
 
+## 1.1.0a0
+
+Reproducible Evidence Bundles milestone:
+
+- portable evidence bundle model
+- embedded autopilot decision artifact
+- embedded baseline and candidate optimization artifacts
+- optional embedded study, correlation and time-series evidence
+- canonical JSON serialization for integrity hashing
+- per-artifact SHA-256 fingerprints
+- bundle-level SHA-256 fingerprint
+- offline bundle verification
+- tamper detection with dedicated CLI exit code
+- runtime provenance capture
+- environment-variable allowlist to avoid arbitrary secret capture
+- user-defined reproducibility tags
+- persisted bundles under `.ago/bundles`
+- `agoctl bundle create|list|show|verify`
+- deterministic hashing, provenance, persistence and CLI tests
+- no scheduler mutation or external side effects
+
 ## 1.0.0a0
 
 Recommend-only Closed-Loop Autopilot milestone:
