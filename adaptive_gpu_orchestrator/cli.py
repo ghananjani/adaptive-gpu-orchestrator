@@ -21,7 +21,10 @@ from adaptive_gpu_orchestrator.campaigns import (
     CampaignStore,
     capture_campaign_provenance,
     compare_campaigns,
+    load_campaign_manifest,
+    resume_campaign,
     run_campaign,
+    save_campaign_manifest,
 )
 from adaptive_gpu_orchestrator.controller import (
     DeploymentPlanner,
@@ -315,6 +318,12 @@ def _plain_campaign(report) -> None:
         f"adapter={report.spec.adapter}  "
         f"objective={report.spec.objective.value}"
     )
+    if report.manifest_sha256:
+        print(f"Manifest SHA-256: {report.manifest_sha256}")
+    print(
+        f"Resume count: {report.resume_count}  "
+        f"pending={list(report.pending_replicates) or 'none'}"
+    )
     print(
         f"Hardware: GPUs={len(gpus)}  "
         f"models={','.join(gpu_names) if gpu_names else 'unknown'}  "
@@ -515,6 +524,33 @@ def _provider(name: str):
     if name == "nvml":
         return NVMLProvider()
     return NvidiaSMIProvider()
+
+
+def _campaign_runner_factory(spec: CampaignSpec):
+    command = list(spec.benchmark_command)
+
+    def factory(replicate, campaign_env):
+        if spec.adapter == "vllm":
+            return AdaptedCommandCanaryRunner(
+                adapter=VLLMMetricsAdapter(),
+                command=command,
+                timeout_s=spec.timeout_s,
+                extra_env=campaign_env,
+            )
+        if spec.adapter == "pytorch-distributed":
+            return AdaptedCommandCanaryRunner(
+                adapter=PyTorchDistributedMetricsAdapter(),
+                command=command,
+                timeout_s=spec.timeout_s,
+                extra_env=campaign_env,
+            )
+        return CommandCanaryRunner(
+            command=command,
+            timeout_s=spec.timeout_s,
+            extra_env=campaign_env,
+        )
+
+    return factory
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -923,7 +959,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     campaign = sub.add_parser(
         "campaign",
-        help="run and compare reproducible repeated optimization campaigns",
+        help="run, resume and compare reproducible optimization campaigns",
     )
     campaign_sub = campaign.add_subparsers(
         dest="campaign_action",
@@ -934,10 +970,11 @@ def build_parser() -> argparse.ArgumentParser:
         "run",
         help="run repeated optimizer replicates with captured provenance",
     )
-    campaign_run.add_argument("--name", required=True)
-    campaign_run.add_argument("--group", required=True)
+    campaign_run.add_argument("--manifest")
+    campaign_run.add_argument("--name")
+    campaign_run.add_argument("--group")
     campaign_run.add_argument("--repeats", type=int, default=3)
-    campaign_run.add_argument("--gpus", type=int, required=True)
+    campaign_run.add_argument("--gpus", type=int)
     campaign_run.add_argument("--tp", default="1,2,4,8")
     campaign_run.add_argument("--pp", default="1,2")
     campaign_run.add_argument("--dp", default="1")
@@ -961,6 +998,11 @@ def build_parser() -> argparse.ArgumentParser:
     campaign_run.add_argument("--min-throughput", type=float)
     campaign_run.add_argument("--max-memory-pressure", type=float)
     campaign_run.add_argument(
+        "--randomize-candidates",
+        action="store_true",
+    )
+    campaign_run.add_argument("--random-seed", type=int)
+    campaign_run.add_argument(
         "--optimization-store",
         default=".ago/optimizations",
     )
@@ -975,8 +1017,32 @@ def build_parser() -> argparse.ArgumentParser:
     campaign_run.add_argument(
         "benchmark_command",
         nargs=argparse.REMAINDER,
-        help="benchmark command after --; must emit one JSON metrics object",
+        help="benchmark command after --; omit when --manifest is used",
     )
+
+    campaign_resume = campaign_sub.add_parser(
+        "resume",
+        help="rerun only incomplete replicates in a saved campaign",
+    )
+    campaign_resume.add_argument("identifier")
+    campaign_resume.add_argument(
+        "--optimization-store",
+        default=".ago/optimizations",
+    )
+    campaign_resume.add_argument("--study-store", default=".ago/studies")
+    campaign_resume.add_argument("--store-dir", default=".ago/campaigns")
+    campaign_resume.add_argument(
+        "--allow-provenance-change",
+        action="store_true",
+    )
+
+    campaign_manifest = campaign_sub.add_parser(
+        "manifest",
+        help="export a hash-verified manifest from a saved campaign",
+    )
+    campaign_manifest.add_argument("identifier")
+    campaign_manifest.add_argument("--output", required=True)
+    campaign_manifest.add_argument("--store-dir", default=".ago/campaigns")
 
     campaign_list = campaign_sub.add_parser(
         "list",
@@ -1739,79 +1805,75 @@ def main(argv: list[str] | None = None) -> int:
         store = CampaignStore(Path(args.store_dir))
 
         if args.campaign_action == "run":
-            command = list(args.benchmark_command)
-            if command and command[0] == "--":
-                command = command[1:]
-            if not command:
-                print(
-                    "error: campaign run requires a benchmark command after --",
-                    file=sys.stderr,
-                )
-                return 2
-
             try:
-                candidates = generate_candidates(
-                    available_gpus=args.gpus,
-                    tensor_parallel=_csv_ints(args.tp),
-                    pipeline_parallel=_csv_ints(args.pp),
-                    data_parallel=_csv_ints(args.dp),
-                    batch_sizes=_csv_ints(args.batch),
-                    concurrencies=_csv_ints(args.concurrency),
-                    exact_world_size=args.exact_world_size,
-                    max_candidates=args.max_candidates,
-                )
-                if not candidates:
-                    raise ValueError(
-                        "campaign search space produced no valid candidates"
+                if args.manifest:
+                    if args.benchmark_command:
+                        raise ValueError(
+                            "benchmark command cannot be supplied with --manifest"
+                        )
+                    if args.tag:
+                        raise ValueError(
+                            "--tag cannot override a hash-verified manifest"
+                        )
+                    manifest = load_campaign_manifest(args.manifest)
+                    spec = manifest.spec
+                else:
+                    command = list(args.benchmark_command)
+                    if command and command[0] == "--":
+                        command = command[1:]
+                    if not command:
+                        raise ValueError(
+                            "campaign run requires a benchmark command after --"
+                        )
+                    if not args.name or not args.group or args.gpus is None:
+                        raise ValueError(
+                            "--name, --group and --gpus are required "
+                            "when --manifest is not used"
+                        )
+
+                    candidates = generate_candidates(
+                        available_gpus=args.gpus,
+                        tensor_parallel=_csv_ints(args.tp),
+                        pipeline_parallel=_csv_ints(args.pp),
+                        data_parallel=_csv_ints(args.dp),
+                        batch_sizes=_csv_ints(args.batch),
+                        concurrencies=_csv_ints(args.concurrency),
+                        exact_world_size=args.exact_world_size,
+                        max_candidates=args.max_candidates,
                     )
-
-                tags = _parse_tags(args.tag)
-                constraints = OptimizationConstraints(
-                    max_p99_latency_ms=args.max_p99_ms,
-                    max_energy_joules=args.max_energy_joules,
-                    min_throughput_per_s=args.min_throughput,
-                    max_memory_pressure_pct=args.max_memory_pressure,
-                )
-                spec = CampaignSpec(
-                    name=args.name,
-                    group=args.group,
-                    repeats=args.repeats,
-                    available_gpus=args.gpus,
-                    candidates=tuple(candidates),
-                    objective=OptimizationObjective(args.objective),
-                    constraints=constraints,
-                    adapter=args.adapter,
-                    benchmark_command=tuple(command),
-                    timeout_s=args.timeout,
-                    tags=tags,
-                )
-                provenance = capture_campaign_provenance(tags=tags)
-
-                def runner_factory(replicate, campaign_env):
-                    if args.adapter == "vllm":
-                        return AdaptedCommandCanaryRunner(
-                            adapter=VLLMMetricsAdapter(),
-                            command=command,
-                            timeout_s=args.timeout,
-                            extra_env=campaign_env,
+                    if not candidates:
+                        raise ValueError(
+                            "campaign search space produced no valid candidates"
                         )
-                    if args.adapter == "pytorch-distributed":
-                        return AdaptedCommandCanaryRunner(
-                            adapter=PyTorchDistributedMetricsAdapter(),
-                            command=command,
-                            timeout_s=args.timeout,
-                            extra_env=campaign_env,
-                        )
-                    return CommandCanaryRunner(
-                        command=command,
+
+                    tags = _parse_tags(args.tag)
+                    constraints = OptimizationConstraints(
+                        max_p99_latency_ms=args.max_p99_ms,
+                        max_energy_joules=args.max_energy_joules,
+                        min_throughput_per_s=args.min_throughput,
+                        max_memory_pressure_pct=args.max_memory_pressure,
+                    )
+                    spec = CampaignSpec(
+                        name=args.name,
+                        group=args.group,
+                        repeats=args.repeats,
+                        available_gpus=args.gpus,
+                        candidates=tuple(candidates),
+                        objective=OptimizationObjective(args.objective),
+                        constraints=constraints,
+                        adapter=args.adapter,
+                        benchmark_command=tuple(command),
                         timeout_s=args.timeout,
-                        extra_env=campaign_env,
+                        randomize_candidates=args.randomize_candidates,
+                        random_seed=args.random_seed,
+                        tags=tags,
                     )
 
+                provenance = capture_campaign_provenance(tags=spec.tags)
                 report = run_campaign(
                     spec=spec,
                     provenance=provenance,
-                    runner_factory=runner_factory,
+                    runner_factory=_campaign_runner_factory(spec),
                     optimization_store=OptimizationStore(
                         Path(args.optimization_store)
                     ),
@@ -1831,6 +1893,60 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"Saved: {path}")
             return 0 if report.successful_replicates else 3
 
+        if args.campaign_action == "resume":
+            try:
+                report = store.load(args.identifier)
+                provenance = capture_campaign_provenance(
+                    tags=report.spec.tags
+                )
+                report = resume_campaign(
+                    report,
+                    runner_factory=_campaign_runner_factory(report.spec),
+                    optimization_store=OptimizationStore(
+                        Path(args.optimization_store)
+                    ),
+                    study_store=StudyStore(Path(args.study_store)),
+                    current_provenance=provenance,
+                    allow_provenance_change=args.allow_provenance_change,
+                )
+                path = store.save(report)
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+
+            if args.json:
+                payload = report.to_dict()
+                payload["path"] = str(path)
+                _print_json(payload)
+            else:
+                _plain_campaign(report)
+                print(f"Saved: {path}")
+            return 0 if not report.pending_replicates else 3
+
+        if args.campaign_action == "manifest":
+            try:
+                report = store.load(args.identifier)
+                manifest = save_campaign_manifest(
+                    report.spec,
+                    args.output,
+                )
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+
+            if args.json:
+                _print_json(
+                    {
+                        "path": str(args.output),
+                        "manifest": manifest.to_dict(),
+                    }
+                )
+            else:
+                print(
+                    f"Manifest: {args.output}  sha256={manifest.sha256}"
+                )
+            return 0
+
         if args.campaign_action == "list":
             reports = store.list()
             if args.json:
@@ -1843,7 +1959,8 @@ def main(argv: list[str] | None = None) -> int:
                         f"{report.id}  name={report.spec.name}  "
                         f"group={report.spec.group}  "
                         f"replicates={report.successful_replicates}/"
-                        f"{report.spec.repeats}"
+                        f"{report.spec.repeats}  "
+                        f"pending={len(report.pending_replicates)}"
                     )
             return 0
 
