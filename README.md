@@ -2,7 +2,7 @@
 
 **An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, normalizes native workload metrics, runs canary optimization, and renders safe deployment plans for GPU schedulers.
 
-> Status: **v0.9 pre-alpha — Statistical Experiment Studies.**
+> Status: **v1.0 alpha — Recommend-only Closed-Loop Autopilot.**
 
 ## Control loop
 
@@ -68,6 +68,18 @@ The controller remains recommend-only: it generates deployment artifacts and pro
 - adapter-specific metric aggregation
 - persisted reports under `.ago/studies`
 - `agoctl study analyze` and `agoctl studies list/show`
+
+### Closed-Loop Autopilot
+- one auditable decision over optimization, validation, studies, telemetry and scheduler policy
+- explicit **promote / hold / reject** outcomes
+- baseline-vs-candidate deployment-plan diff
+- optional statistical-study, correlation and per-GPU time-series evidence gates
+- Pareto-frontier and config-stability gating
+- thermal, memory-pressure and straggler holds
+- operator-controlled rollback plan to the saved baseline configuration
+- persisted reports under `.ago/autopilot`
+- `agoctl autopilot decide|list|show`
+- hard safety boundary: no Kubernetes or Slurm mutation from the autopilot process
 
 ### Configuration Optimizer
 - TP/PP/DP + batch/concurrency search spaces
@@ -204,6 +216,46 @@ agoctl plan \
 ```
 
 The current Kubernetes renderer emits a single-pod `batch/v1 Job`; the target node therefore needs enough GPUs for the requested world size.
+
+## Make a closed-loop autopilot decision
+
+The autopilot combines the evidence produced by the earlier milestones into one recommend-only decision:
+
+```bash
+agoctl autopilot decide \
+  --baseline-optimization baseline-run \
+  --candidate-optimization candidate-run \
+  --backend slurm \
+  --available-gpus 8 \
+  --min-throughput-gain 5 \
+  --max-p99-regression 5 \
+  --study study-id \
+  --require-study \
+  --correlation correlation-id \
+  --require-correlation \
+  --timeseries timeseries-id \
+  --require-timeseries \
+  -- python train.py
+```
+
+Decision semantics:
+
+- **promote** — guarded validation and every configured evidence gate passed.
+- **hold** — validation passed, but evidence is insufficient or operational risk remains, such as low replicate count, unstable config selection, stragglers, high memory pressure, high temperature, mismatched evidence, or no meaningful plan change.
+- **reject** — the candidate violates an explicit guarded-validation threshold.
+
+Every report stores both scheduler plans, their diff, the validation report, evidence IDs, policy reasoning, and an operator-controlled rollback recipe that targets the baseline configuration.
+
+Exit codes are `0` for promote, `4` for hold, and `3` for reject.
+
+Inspect history:
+
+```bash
+agoctl autopilot list
+agoctl autopilot show <decision-id>
+```
+
+See [`docs/closed-loop-autopilot.md`](docs/closed-loop-autopilot.md).
 
 ## Compare repeated experiment groups
 
@@ -360,7 +412,7 @@ Per-GPU telemetry, DCGM ingestion, phase alignment and persistent straggler anal
 Repeated-run confidence intervals, effect sizes, configuration stability and Pareto analysis.
 
 ### v1.0 — Closed-loop Autopilot
-Guarded observe/diagnose/experiment/optimize/deploy/validate control loop.
+Recommend-only promote/hold/reject orchestration across optimization, statistical evidence, telemetry, scheduler planning, validation and rollback.
 
 ## License
 
