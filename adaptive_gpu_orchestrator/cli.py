@@ -26,6 +26,12 @@ from adaptive_gpu_orchestrator.correlation import (
     correlate_optimization,
 )
 from adaptive_gpu_orchestrator.doctor import Doctor
+from adaptive_gpu_orchestrator.evidence import (
+    EvidenceBundleStore,
+    build_evidence_bundle,
+    capture_provenance,
+    verify_bundle,
+)
 from adaptive_gpu_orchestrator.optimizer import (
     CommandCanaryRunner,
     ConfigurationOptimizer,
@@ -277,6 +283,39 @@ def _plain_autopilot(report) -> None:
     print("\nRollback:")
     for step in report.rollback.steps:
         print(f"  - {step}")
+
+
+def _plain_bundle(bundle, verification=None) -> None:
+    print(
+        f"Evidence bundle: {bundle.id}  autopilot={bundle.autopilot_report_id}  "
+        f"artifacts={len(bundle.artifacts)}"
+    )
+    print(f"SHA-256: {bundle.sha256}")
+
+    provenance = bundle.provenance
+    details = []
+    if provenance.package_version:
+        details.append(f"package={provenance.package_version}")
+    if provenance.git_commit:
+        details.append(f"git={provenance.git_commit[:12]}")
+    details.append(f"python={provenance.python_version}")
+    if details:
+        print("Provenance: " + "  ".join(details))
+
+    print("\nArtifacts:")
+    for artifact in bundle.artifacts:
+        print(
+            f"  - {artifact.kind} {artifact.identifier} "
+            f"sha256={artifact.sha256[:12]}..."
+        )
+
+    if verification is not None:
+        print(
+            f"\nIntegrity: valid={verification.valid}  "
+            f"bundle_hash_matches={verification.bundle_hash_matches}"
+        )
+        for failure in verification.artifact_failures:
+            print(f"  - failed artifact: {failure}")
 
 
 def _plain_study(report) -> None:
@@ -806,6 +845,63 @@ def build_parser() -> argparse.ArgumentParser:
     )
     autopilot_show.add_argument("identifier")
     autopilot_show.add_argument("--store-dir", default=".ago/autopilot")
+
+    bundle = sub.add_parser(
+        "bundle",
+        help="create and verify portable evidence bundles",
+    )
+    bundle_sub = bundle.add_subparsers(
+        dest="bundle_action",
+        required=True,
+    )
+
+    bundle_create = bundle_sub.add_parser(
+        "create",
+        help="bundle an autopilot decision with every referenced evidence artifact",
+    )
+    bundle_create.add_argument("--autopilot", required=True)
+    bundle_create.add_argument("--autopilot-store", default=".ago/autopilot")
+    bundle_create.add_argument(
+        "--optimization-store",
+        default=".ago/optimizations",
+    )
+    bundle_create.add_argument("--study-store", default=".ago/studies")
+    bundle_create.add_argument(
+        "--correlation-store",
+        default=".ago/correlations",
+    )
+    bundle_create.add_argument(
+        "--timeseries-store",
+        default=".ago/timeseries",
+    )
+    bundle_create.add_argument("--store-dir", default=".ago/bundles")
+    bundle_create.add_argument(
+        "--tag",
+        action="append",
+        default=[],
+        metavar="KEY=VALUE",
+        help="attach reproducibility metadata; may be repeated",
+    )
+
+    bundle_list = bundle_sub.add_parser(
+        "list",
+        help="list saved evidence bundles",
+    )
+    bundle_list.add_argument("--store-dir", default=".ago/bundles")
+
+    bundle_show = bundle_sub.add_parser(
+        "show",
+        help="show and verify one evidence bundle",
+    )
+    bundle_show.add_argument("identifier")
+    bundle_show.add_argument("--store-dir", default=".ago/bundles")
+
+    bundle_verify = bundle_sub.add_parser(
+        "verify",
+        help="verify all artifact fingerprints and the bundle fingerprint",
+    )
+    bundle_verify.add_argument("identifier")
+    bundle_verify.add_argument("--store-dir", default=".ago/bundles")
 
     return parser
 
@@ -1442,6 +1538,110 @@ def main(argv: list[str] | None = None) -> int:
             print(f"error: {exc}", file=sys.stderr)
             return 2
         _print_json(report.to_dict()) if args.json else _plain_autopilot(report)
+        return 0
+
+    if args.command == "bundle":
+        store = EvidenceBundleStore(Path(args.store_dir))
+
+        if args.bundle_action == "create":
+            try:
+                autopilot = AutopilotStore(
+                    Path(args.autopilot_store)
+                ).load(args.autopilot)
+                optimization_store = OptimizationStore(
+                    Path(args.optimization_store)
+                )
+                baseline = optimization_store.load(
+                    autopilot.baseline_optimization_id
+                )
+                candidate = optimization_store.load(
+                    autopilot.candidate_optimization_id
+                )
+
+                study = (
+                    StudyStore(Path(args.study_store)).load(
+                        autopilot.study_id
+                    )
+                    if autopilot.study_id
+                    else None
+                )
+                correlation = (
+                    CorrelationStore(Path(args.correlation_store)).load(
+                        autopilot.correlation_id
+                    )
+                    if autopilot.correlation_id
+                    else None
+                )
+                timeseries = (
+                    TimeSeriesStore(Path(args.timeseries_store)).load(
+                        autopilot.timeseries_id
+                    )
+                    if autopilot.timeseries_id
+                    else None
+                )
+
+                provenance = capture_provenance(
+                    tags=_parse_tags(args.tag)
+                )
+                bundle = build_evidence_bundle(
+                    autopilot=autopilot,
+                    baseline=baseline,
+                    candidate=candidate,
+                    provenance=provenance,
+                    study=study,
+                    correlation=correlation,
+                    timeseries=timeseries,
+                )
+                path = store.save(bundle)
+                verification = verify_bundle(bundle)
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+
+            if args.json:
+                payload = bundle.to_dict()
+                payload["path"] = str(path)
+                payload["verification"] = verification.to_dict()
+                _print_json(payload)
+            else:
+                _plain_bundle(bundle, verification)
+                print(f"Saved: {path}")
+            return 0
+
+        if args.bundle_action == "list":
+            bundles = store.list()
+            if args.json:
+                _print_json([bundle.to_dict() for bundle in bundles])
+            else:
+                if not bundles:
+                    print("No saved evidence bundles.")
+                for bundle in bundles:
+                    print(
+                        f"{bundle.id}  autopilot={bundle.autopilot_report_id}  "
+                        f"artifacts={len(bundle.artifacts)}  "
+                        f"sha256={bundle.sha256[:12]}..."
+                    )
+            return 0
+
+        try:
+            bundle = store.load(args.identifier)
+        except FileNotFoundError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 2
+
+        verification = verify_bundle(bundle)
+        if args.json:
+            _print_json(
+                {
+                    "bundle": bundle.to_dict(),
+                    "verification": verification.to_dict(),
+                }
+            )
+        else:
+            _plain_bundle(bundle, verification)
+
+        if args.bundle_action == "verify":
+            return 0 if verification.valid else 5
         return 0
 
     return 2
