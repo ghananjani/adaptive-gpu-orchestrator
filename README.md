@@ -2,7 +2,7 @@
 
 **An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, normalizes native workload metrics, runs canary optimization, and renders safe deployment plans for GPU schedulers.
 
-> Status: **v1.0 alpha — Recommend-only Closed-Loop Autopilot.**
+> Status: **v1.1 alpha — Reproducible Evidence Bundles.**
 
 ## Control loop
 
@@ -80,6 +80,19 @@ The controller remains recommend-only: it generates deployment artifacts and pro
 - persisted reports under `.ago/autopilot`
 - `agoctl autopilot decide|list|show`
 - hard safety boundary: no Kubernetes or Slurm mutation from the autopilot process
+
+### Reproducible Evidence Bundles
+- portable snapshot of an autopilot decision and every referenced evidence artifact
+- embedded baseline and candidate optimization results
+- optional embedded statistical study, correlation and time-series reports
+- canonical JSON SHA-256 fingerprint per artifact
+- bundle-level SHA-256 fingerprint
+- offline integrity verification without the original `.ago` stores
+- runtime provenance: Python, platform, package version and git commit when available
+- safe environment whitelist rather than arbitrary environment capture
+- user-defined reproducibility tags
+- persisted bundles under `.ago/bundles`
+- `agoctl bundle create|list|show|verify`
 
 ### Configuration Optimizer
 - TP/PP/DP + batch/concurrency search spaces
@@ -216,6 +229,38 @@ agoctl plan \
 ```
 
 The current Kubernetes renderer emits a single-pod `batch/v1 Job`; the target node therefore needs enough GPUs for the requested world size.
+
+## Create a reproducible evidence bundle
+
+After an autopilot decision is saved, package the decision and all of its referenced evidence into one portable JSON artifact:
+
+```bash
+agoctl bundle create \
+  --autopilot <decision-id> \
+  --tag hardware=h100 \
+  --tag workload=llama70b
+```
+
+The bundle automatically loads the baseline and candidate optimization runs referenced by the decision and, when present, its study, correlation and time-series evidence. Each embedded artifact gets a canonical SHA-256 fingerprint, and the complete bundle gets its own SHA-256 fingerprint.
+
+Verify a saved bundle without needing the original evidence stores:
+
+```bash
+agoctl bundle verify <bundle-id>
+```
+
+Inspect or list bundles:
+
+```bash
+agoctl bundle show <bundle-id>
+agoctl bundle list
+```
+
+Integrity verification returns exit code `0` when valid and `5` when either an embedded artifact fingerprint or the bundle fingerprint does not match.
+
+Provenance captures Python/runtime information, package version, git commit when available, user-provided tags, and only a small allowlist of environment variables such as `CUDA_VISIBLE_DEVICES` and selected NCCL settings. Arbitrary environment variables and secrets are not collected.
+
+See [`docs/evidence-bundles.md`](docs/evidence-bundles.md).
 
 ## Make a closed-loop autopilot decision
 
@@ -413,6 +458,9 @@ Repeated-run confidence intervals, effect sizes, configuration stability and Par
 
 ### v1.0 — Closed-loop Autopilot
 Recommend-only promote/hold/reject orchestration across optimization, statistical evidence, telemetry, scheduler planning, validation and rollback.
+
+### v1.1 — Reproducible Evidence Bundles
+Portable integrity-checked decision/evidence bundles with runtime provenance and offline verification.
 
 ## License
 
