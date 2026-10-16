@@ -1,5 +1,28 @@
 # Changelog
 
+## 1.4.0a0
+
+Campaign Manifests + Resume milestone:
+
+- schema-versioned campaign manifests
+- canonical SHA-256 manifest fingerprints
+- manifest tamper detection
+- manifest-driven campaign execution
+- manifest export from saved campaigns
+- deterministic candidate-order randomization
+- required seed for randomized campaigns
+- per-replicate candidate-order audit trail
+- resumable incomplete/error replicates
+- preservation of completed optimization IDs
+- automatic statistical-study rebuild after resume
+- static hardware/software provenance compatibility guard
+- explicit provenance-change override with resume audit trail
+- `agoctl campaign manifest`
+- `agoctl campaign resume`
+- `agoctl campaign run --manifest`
+- backward-compatible loading of v1.3 campaign JSON
+- deterministic manifest, resume, randomization and CLI tests
+
 ## 1.3.0a0
 
 Experiment Campaigns + Hardware/Software Provenance milestone:
