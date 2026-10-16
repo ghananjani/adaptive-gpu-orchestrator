@@ -13,6 +13,13 @@ from .autopilot import (
     RollbackPlan,
     decide_autopilot,
 )
+from .benchmarks import (
+    NCCLBaselineSpec,
+    NCCLBenchmark,
+    NCCLCommunicationBaseline,
+    capture_nccl_baseline,
+    parse_nccl_output,
+)
 from .campaigns import (
     CAMPAIGN_MANIFEST_SCHEMA_VERSION,
     CampaignManifest,
@@ -127,6 +134,9 @@ __all__ = [
     "GPUDevice",
     "GPUTimeSeriesSummary",
     "MetricComparison",
+    "NCCLBaselineSpec",
+    "NCCLBenchmark",
+    "NCCLCommunicationBaseline",
     "MetricSummary",
     "OptimizationConstraints",
     "OptimizationObjective",
@@ -160,6 +170,7 @@ __all__ = [
     "build_evidence_bundle",
     "canonical_json",
     "capture_campaign_provenance",
+    "capture_nccl_baseline",
     "capture_provenance",
     "compare_campaigns",
     "correlate_optimization",
@@ -167,6 +178,7 @@ __all__ = [
     "diff_plans",
     "load_campaign_manifest",
     "parse_dcgm_dmon",
+    "parse_nccl_output",
     "parse_dcgm_exporter",
     "resume_campaign",
     "run_campaign",
@@ -177,4 +189,4 @@ __all__ = [
     "validate_trials",
     "verify_bundle",
 ]
-__version__ = "1.4.0a0"
+__version__ = "1.5.0a0"
