@@ -1,4 +1,6 @@
-from .analysis import correlate_optimization, summarize_nccl
+from adaptive_gpu_orchestrator.benchmarks import summarize_nccl
+
+from .analysis import correlate_optimization
 from .models import CorrelationReport
 from .store import CorrelationStore
 
