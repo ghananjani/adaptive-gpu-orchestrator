@@ -2,7 +2,7 @@
 
 **An autopilot for GPU clusters.** `adaptive_gpu_orchestrator` discovers GPU topology, profiles workloads, diagnoses bottlenecks, normalizes native workload metrics, runs canary optimization, and renders safe deployment plans for GPU schedulers.
 
-> Status: **v1.4 alpha — Campaign Manifests + Resume.**
+> Status: **v1.5 alpha — Campaign Baselines + Research Export.**
 
 ## Control loop
 
@@ -134,6 +134,18 @@ The controller remains recommend-only: it generates deployment artifacts and pro
 - per-replicate candidate-order audit trail
 - manifest fingerprint injected into benchmark environment
 
+### Campaign Baselines + Research Export
+- optional NCCL all-reduce baseline captured once per campaign
+- ingest saved `nccl-tests` output or execute the configured NCCL binary
+- mean/peak algorithm and bus bandwidth retained with raw NCCL rows
+- explicit CUDA toolkit and NCCL version provenance
+- optional container image and digest provenance
+- resume guard includes the richer software/container provenance
+- one analysis row per optimizer trial, not only the winner
+- flattened TP/PP/DP/batch/concurrency and standard metrics
+- adapter-native metrics exported as `extra_*` columns
+- CSV and JSONL output through `agoctl campaign export`
+
 ### Configuration Optimizer
 - TP/PP/DP + batch/concurrency search spaces
 - canary benchmarks
@@ -180,6 +192,57 @@ Profile:
 ```bash
 agoctl profile --name llama70b -- python serve.py
 ```
+
+## Capture an NCCL campaign baseline and export research data
+
+Run one NCCL baseline before the optimizer replicates:
+
+```bash
+agoctl campaign run \
+  --name h100-llama70b \
+  --group h100 \
+  --repeats 5 \
+  --gpus 8 \
+  --tp 1,2,4,8 \
+  --nccl-baseline \
+  --nccl-binary /opt/nccl-tests/build/all_reduce_perf \
+  --container-image registry.example/llm:2026-10 \
+  --container-image-digest sha256:... \
+  -- python benchmark_vllm.py
+```
+
+For offline/reproducible ingestion, use saved `nccl-tests` output instead:
+
+```bash
+agoctl campaign run \
+  --name h100-llama70b \
+  --group h100 \
+  --gpus 8 \
+  --nccl-output artifacts/h100-allreduce.txt \
+  -- python benchmark_vllm.py
+```
+
+The campaign stores raw NCCL rows plus mean/peak algorithm bandwidth and bus bandwidth. Provenance also records the CUDA runtime discovered from the GPU stack, CUDA toolkit version when `nvcc` is available (or explicitly supplied), NCCL version when detectable, and optional container image/digest.
+
+Export every optimizer trial from a campaign:
+
+```bash
+agoctl campaign export <campaign-id> \
+  --format csv \
+  --output results/h100-llama70b.csv
+```
+
+or:
+
+```bash
+agoctl campaign export <campaign-id> \
+  --format jsonl \
+  --output results/h100-llama70b.jsonl
+```
+
+Each row includes campaign/replicate IDs, configuration, whether the trial was selected as best, feasibility, normalized metrics, adapter-native `extra_*` metrics, GPU/driver/CUDA/NCCL/container provenance, manifest fingerprint and NCCL-baseline summary. This makes H100-vs-H200 analysis directly consumable by pandas/R/Julia without parsing internal JSON stores.
+
+See [`docs/campaign-baselines-export.md`](docs/campaign-baselines-export.md).
 
 ## Export and run a campaign manifest
 
@@ -645,6 +708,9 @@ Repeated optimization campaigns with hardware/software provenance and direct cam
 
 ### v1.4 — Campaign Manifests + Resume
 Hash-verified declarative campaign specs, deterministic candidate ordering and provenance-guarded resume of incomplete replicates.
+
+### v1.5 — Campaign Baselines + Research Export
+Campaign-level NCCL baselines, richer CUDA/NCCL/container provenance, and trial-level CSV/JSONL export for reproducible research analysis.
 
 ## License
 
