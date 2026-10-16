@@ -17,6 +17,7 @@ from adaptive_gpu_orchestrator.autopilot import (
 )
 from adaptive_gpu_orchestrator.benchmarks import NCCLBenchmark, parse_nccl_output
 from adaptive_gpu_orchestrator.campaigns import (
+    CampaignNCCLBaseline,
     CampaignSpec,
     CampaignStore,
     capture_campaign_provenance,
@@ -25,6 +26,7 @@ from adaptive_gpu_orchestrator.campaigns import (
     resume_campaign,
     run_campaign,
     save_campaign_manifest,
+    write_campaign_export,
 )
 from adaptive_gpu_orchestrator.controller import (
     DeploymentPlanner,
@@ -332,6 +334,23 @@ def _plain_campaign(report) -> None:
     )
     if report.study_id:
         print(f"Study: {report.study_id}")
+    if report.provenance.cuda_toolkit_version:
+        print(f"CUDA toolkit: {report.provenance.cuda_toolkit_version}")
+    if report.provenance.nccl_version:
+        print(f"NCCL: {report.provenance.nccl_version}")
+    if report.provenance.container_image:
+        image = report.provenance.container_image
+        digest = report.provenance.container_image_digest
+        print(f"Container: {image}" + (f"@{digest}" if digest else ""))
+
+    if report.nccl_baseline is not None:
+        summary = report.nccl_baseline.summary
+        print(
+            "NCCL baseline: "
+            f"samples={summary['sample_count']} "
+            f"mean_busbw={summary['mean_busbw_gbps']} "
+            f"peak_busbw={summary['peak_busbw_gbps']} Gbps"
+        )
 
     print("\nRuns:")
     for run in report.runs:
@@ -1014,6 +1033,25 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         metavar="KEY=VALUE",
     )
+    campaign_run.add_argument("--cuda-toolkit-version")
+    campaign_run.add_argument("--nccl-version")
+    campaign_run.add_argument("--container-image")
+    campaign_run.add_argument("--container-image-digest")
+    nccl_source = campaign_run.add_mutually_exclusive_group()
+    nccl_source.add_argument(
+        "--nccl-baseline",
+        action="store_true",
+        help="run nccl-tests once before campaign replicates",
+    )
+    nccl_source.add_argument(
+        "--nccl-output",
+        help="ingest saved nccl-tests output instead of running a baseline",
+    )
+    campaign_run.add_argument("--nccl-binary", default="all_reduce_perf")
+    campaign_run.add_argument("--nccl-begin", default="8M")
+    campaign_run.add_argument("--nccl-end", default="1G")
+    campaign_run.add_argument("--nccl-factor", type=int, default=2)
+    campaign_run.add_argument("--nccl-gpus", type=int)
     campaign_run.add_argument(
         "benchmark_command",
         nargs=argparse.REMAINDER,
@@ -1034,6 +1072,27 @@ def build_parser() -> argparse.ArgumentParser:
     campaign_resume.add_argument(
         "--allow-provenance-change",
         action="store_true",
+    )
+    campaign_resume.add_argument("--cuda-toolkit-version")
+    campaign_resume.add_argument("--nccl-version")
+    campaign_resume.add_argument("--container-image")
+    campaign_resume.add_argument("--container-image-digest")
+
+    campaign_export = campaign_sub.add_parser(
+        "export",
+        help="export every optimizer trial as analysis-ready CSV or JSONL",
+    )
+    campaign_export.add_argument("identifier")
+    campaign_export.add_argument("--output", required=True)
+    campaign_export.add_argument(
+        "--format",
+        choices=("csv", "jsonl"),
+        default="csv",
+    )
+    campaign_export.add_argument("--store-dir", default=".ago/campaigns")
+    campaign_export.add_argument(
+        "--optimization-store",
+        default=".ago/optimizations",
     )
 
     campaign_manifest = campaign_sub.add_parser(
@@ -1587,7 +1646,7 @@ def main(argv: list[str] | None = None) -> int:
                     straggler_gap_pct_points=args.straggler_gap,
                 )
                 path = store.save(report)
-            except (FileNotFoundError, ValueError) as exc:
+            except (FileNotFoundError, RuntimeError, ValueError) as exc:
                 print(f"error: {exc}", file=sys.stderr)
                 return 2
 
@@ -1869,7 +1928,57 @@ def main(argv: list[str] | None = None) -> int:
                         tags=tags,
                     )
 
-                provenance = capture_campaign_provenance(tags=spec.tags)
+                provenance = capture_campaign_provenance(
+                    tags=spec.tags,
+                    cuda_toolkit_version=args.cuda_toolkit_version,
+                    nccl_version=args.nccl_version,
+                    container_image=args.container_image,
+                    container_image_digest=args.container_image_digest,
+                )
+
+                nccl_baseline = None
+                nccl_gpus = args.nccl_gpus or spec.available_gpus
+                if args.nccl_output:
+                    with open(args.nccl_output, "r", encoding="utf-8") as handle:
+                        nccl_results = parse_nccl_output(handle.read())
+                    if not nccl_results:
+                        raise ValueError(
+                            "saved NCCL output contained no benchmark rows"
+                        )
+                    nccl_baseline = CampaignNCCLBaseline(
+                        operation="all_reduce",
+                        source="saved-output",
+                        binary=args.nccl_binary,
+                        begin=args.nccl_begin,
+                        end=args.nccl_end,
+                        factor=args.nccl_factor,
+                        gpus=nccl_gpus,
+                        results=tuple(nccl_results),
+                    )
+                elif args.nccl_baseline:
+                    nccl_results = NCCLBenchmark(
+                        binary=args.nccl_binary
+                    ).run(
+                        begin=args.nccl_begin,
+                        end=args.nccl_end,
+                        factor=args.nccl_factor,
+                        gpus=nccl_gpus,
+                    )
+                    if not nccl_results:
+                        raise ValueError(
+                            "NCCL baseline produced no benchmark rows"
+                        )
+                    nccl_baseline = CampaignNCCLBaseline(
+                        operation="all_reduce",
+                        source="executed",
+                        binary=args.nccl_binary,
+                        begin=args.nccl_begin,
+                        end=args.nccl_end,
+                        factor=args.nccl_factor,
+                        gpus=nccl_gpus,
+                        results=tuple(nccl_results),
+                    )
+
                 report = run_campaign(
                     spec=spec,
                     provenance=provenance,
@@ -1878,6 +1987,7 @@ def main(argv: list[str] | None = None) -> int:
                         Path(args.optimization_store)
                     ),
                     study_store=StudyStore(Path(args.study_store)),
+                    nccl_baseline=nccl_baseline,
                 )
                 path = store.save(report)
             except (FileNotFoundError, ValueError) as exc:
@@ -1897,7 +2007,11 @@ def main(argv: list[str] | None = None) -> int:
             try:
                 report = store.load(args.identifier)
                 provenance = capture_campaign_provenance(
-                    tags=report.spec.tags
+                    tags=report.spec.tags,
+                    cuda_toolkit_version=args.cuda_toolkit_version,
+                    nccl_version=args.nccl_version,
+                    container_image=args.container_image,
+                    container_image_digest=args.container_image_digest,
                 )
                 report = resume_campaign(
                     report,
@@ -1922,6 +2036,36 @@ def main(argv: list[str] | None = None) -> int:
                 _plain_campaign(report)
                 print(f"Saved: {path}")
             return 0 if not report.pending_replicates else 3
+
+        if args.campaign_action == "export":
+            try:
+                report = store.load(args.identifier)
+                path = write_campaign_export(
+                    report,
+                    optimization_store=OptimizationStore(
+                        Path(args.optimization_store)
+                    ),
+                    output=args.output,
+                    format=args.format,
+                )
+            except (FileNotFoundError, ValueError) as exc:
+                print(f"error: {exc}", file=sys.stderr)
+                return 2
+
+            if args.json:
+                _print_json(
+                    {
+                        "campaign_id": report.id,
+                        "format": args.format,
+                        "path": str(path),
+                    }
+                )
+            else:
+                print(
+                    f"Exported campaign {report.id} to {path} "
+                    f"({args.format})"
+                )
+            return 0
 
         if args.campaign_action == "manifest":
             try:
