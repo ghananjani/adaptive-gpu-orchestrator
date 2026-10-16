@@ -10,6 +10,7 @@ from adaptive_gpu_orchestrator.controller import DeploymentPlan
 class KubernetesRenderer:
     image: str
     job_name: str = "ago-workload"
+    queue_name: str | None = None
 
     def render(self, plan: DeploymentPlan) -> dict[str, Any]:
         if not self.image:
@@ -36,12 +37,16 @@ class KubernetesRenderer:
         if plan.node_selector:
             pod_spec["nodeSelector"] = dict(plan.node_selector)
 
+        labels = {"ago.plan-id": plan.id}
+        if self.queue_name:
+            labels["kueue.x-k8s.io/queue-name"] = self.queue_name
+
         return {
             "apiVersion": "batch/v1",
             "kind": "Job",
             "metadata": {
                 "name": self.job_name,
-                "labels": {"ago.plan-id": plan.id},
+                "labels": labels,
             },
             "spec": {
                 "backoffLimit": 0,
