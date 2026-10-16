@@ -4,6 +4,10 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 from uuid import uuid4
 
+from adaptive_gpu_orchestrator.benchmarks import (
+    NCCLBaselineSpec,
+    NCCLCommunicationBaseline,
+)
 from adaptive_gpu_orchestrator.evidence import RuntimeProvenance
 from adaptive_gpu_orchestrator.optimizer import (
     OptimizationConstraints,
@@ -26,6 +30,7 @@ class CampaignSpec:
     timeout_s: float = 120.0
     randomize_candidates: bool = False
     random_seed: int | None = None
+    nccl_baseline: NCCLBaselineSpec | None = None
     tags: dict[str, str] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -62,6 +67,11 @@ class CampaignSpec:
             "timeout_s": self.timeout_s,
             "randomize_candidates": self.randomize_candidates,
             "random_seed": self.random_seed,
+            "nccl_baseline": (
+                self.nccl_baseline.to_dict()
+                if self.nccl_baseline is not None
+                else None
+            ),
             "tags": dict(self.tags),
         }
 
@@ -92,6 +102,11 @@ class CampaignSpec:
                 if data.get("random_seed") is None
                 else int(data["random_seed"])
             ),
+            nccl_baseline=(
+                None
+                if data.get("nccl_baseline") is None
+                else NCCLBaselineSpec.from_dict(data["nccl_baseline"])
+            ),
             tags={
                 str(key): str(value)
                 for key, value in data.get("tags", {}).items()
@@ -104,12 +119,14 @@ class CampaignProvenance:
     runtime: RuntimeProvenance
     cluster_snapshot: dict[str, Any]
     package_versions: dict[str, str]
+    runtime_versions: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "runtime": self.runtime.to_dict(),
             "cluster_snapshot": dict(self.cluster_snapshot),
             "package_versions": dict(self.package_versions),
+            "runtime_versions": dict(self.runtime_versions),
         }
 
     @classmethod
@@ -120,6 +137,10 @@ class CampaignProvenance:
             package_versions={
                 str(key): str(value)
                 for key, value in data.get("package_versions", {}).items()
+            },
+            runtime_versions={
+                str(key): str(value)
+                for key, value in data.get("runtime_versions", {}).items()
             },
         )
 
@@ -159,6 +180,7 @@ class CampaignReport:
     provenance: CampaignProvenance
     runs: list[CampaignRun]
     study_id: str | None = None
+    communication_baseline: NCCLCommunicationBaseline | None = None
     findings: list[str] = field(default_factory=list)
     manifest_sha256: str | None = None
     resume_count: int = 0
@@ -197,6 +219,11 @@ class CampaignReport:
             "provenance": self.provenance.to_dict(),
             "runs": [run.to_dict() for run in self.runs],
             "study_id": self.study_id,
+            "communication_baseline": (
+                self.communication_baseline.to_dict()
+                if self.communication_baseline is not None
+                else None
+            ),
             "findings": list(self.findings),
             "manifest_sha256": self.manifest_sha256,
             "resume_count": self.resume_count,
@@ -219,6 +246,13 @@ class CampaignReport:
                 for item in data.get("runs", [])
             ],
             study_id=data.get("study_id"),
+            communication_baseline=(
+                None
+                if data.get("communication_baseline") is None
+                else NCCLCommunicationBaseline.from_dict(
+                    data["communication_baseline"]
+                )
+            ),
             findings=[
                 str(item)
                 for item in data.get("findings", [])
