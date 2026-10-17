@@ -51,7 +51,7 @@ def test_rejects_untrainable_holdout():
 def test_nonfinite_targets_and_failed_trials_excluded():
     samples = rows()
     samples[0]["throughput_per_s"] = float("nan")
-    samples[1]["exit_code"] = 1
+    samples[4]["exit_code"] = 1
     outcome = evaluate_hardware_transfer(samples)
     assert outcome.sample_count == 6
 
