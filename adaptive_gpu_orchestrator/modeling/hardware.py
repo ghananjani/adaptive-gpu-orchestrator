@@ -6,8 +6,9 @@ The diagnostics do not constitute predictive confidence intervals.
 from __future__ import annotations
 
 import math
+from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import Any, Iterable
+from typing import Any
 
 HARDWARE_FEATURE_NAMES = (
     "gpu_count",
@@ -30,11 +31,11 @@ class HardwareFeatures:
         for name in HARDWARE_FEATURE_NAMES:
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)):
-                raise ValueError(f"{name} must be a finite positive number")
+                raise TypeError(f"{name} must be a finite positive number")
             if not math.isfinite(value) or value <= 0:
                 raise ValueError(f"{name} must be a finite positive number")
         if not isinstance(self.gpu_count, int):
-            raise ValueError("gpu_count must be an integer")
+            raise TypeError("gpu_count must be an integer")
 
     def vector(self) -> tuple[float, ...]:
         return tuple(math.log2(getattr(self, name)) for name in HARDWARE_FEATURE_NAMES)
