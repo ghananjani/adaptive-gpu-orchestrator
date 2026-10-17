@@ -103,6 +103,9 @@ def evaluate_hardware_transfer(
     if len(by_platform) < 2:
         raise ValueError("cross-platform evaluation requires at least two platforms")
 
+    for samples in by_platform.values():
+        samples.sort(key=lambda item: (item[0].label(), item[1]))
+
     folds = []
     squared_errors = []
     absolute_errors = []
