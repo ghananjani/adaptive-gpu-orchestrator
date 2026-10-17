@@ -1,6 +1,11 @@
 # Changelog
 
-## Unreleased — v1.7 cross-hardware evaluation foundation
+## Unreleased — v1.7 cross-hardware research foundations
+
+- explicit user-supplied measured hardware feature descriptors
+- conservative log-feature out-of-distribution diagnostic and range guard
+- new deterministic input-validation and OOD tests
+- no SKU numbers inferred, no calibrated uncertainty claims, no scheduler changes
 
 - leave-one-hardware-platform-out model evaluation on exported campaign trials
 - per-platform RMSE / MAE and training-mean baseline RMSE

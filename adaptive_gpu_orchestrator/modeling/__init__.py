@@ -1,4 +1,10 @@
 from .evaluation import HardwareHoldout, HardwareTransferEvaluation, evaluate_hardware_transfer
+from .hardware import (
+    HARDWARE_FEATURE_NAMES,
+    HardwareFeatures,
+    HardwareOODReport,
+    assess_hardware_ood,
+)
 from .linear import fit_metric_model
 from .models import (
     FEATURE_NAMES,
@@ -16,14 +22,18 @@ from .training import DEFAULT_MODEL_METRICS, train_performance_model
 __all__ = [
     "DEFAULT_MODEL_METRICS",
     "FEATURE_NAMES",
+    "HARDWARE_FEATURE_NAMES",
     "MODEL_SCHEMA_VERSION",
     "ExperimentRecommendation",
+    "HardwareFeatures",
     "HardwareHoldout",
+    "HardwareOODReport",
     "HardwareTransferEvaluation",
     "MetricPerformanceModel",
     "PerformanceModelReport",
     "PerformanceModelStore",
     "RecommendationReport",
+    "assess_hardware_ood",
     "config_feature_vector",
     "evaluate_hardware_transfer",
     "fit_metric_model",
