@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased — v1.7 cross-hardware evaluation foundation
+
+- leave-one-hardware-platform-out model evaluation on exported campaign trials
+- per-platform RMSE / MAE and training-mean baseline RMSE
+- pooled cross-platform error and deterministic research report serialization
+- explicit separation of evaluation from hardware-conditioned prediction
+- no changes to persisted v1.6 performance-model schema or deployment behavior
+
+
 ## 1.6.0a0
 
 Performance Modeling + Experiment Recommendation milestone:
