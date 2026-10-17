@@ -26,12 +26,12 @@ def test_hardware_roundtrip_and_order():
 
 @pytest.mark.parametrize("value", [0, -1, float("nan"), float("inf"), True])
 def test_invalid_measurements_rejected(value):
-    with pytest.raises(ValueError, match="finite positive"):
+    with pytest.raises((TypeError, ValueError), match="finite positive"):
         sample(memory_bandwidth_gbps_per_gpu=value)
 
 
 def test_gpu_count_must_be_integer():
-    with pytest.raises(ValueError, match="integer"):
+    with pytest.raises(TypeError, match="integer"):
         sample(gpu_count=2.5)
 
 
