@@ -16,10 +16,10 @@ from .training import DEFAULT_MODEL_METRICS, train_performance_model
 __all__ = [
     "DEFAULT_MODEL_METRICS",
     "FEATURE_NAMES",
-    "HardwareHoldout",
-    "HardwareTransferEvaluation",
     "MODEL_SCHEMA_VERSION",
     "ExperimentRecommendation",
+    "HardwareHoldout",
+    "HardwareTransferEvaluation",
     "MetricPerformanceModel",
     "PerformanceModelReport",
     "PerformanceModelStore",
