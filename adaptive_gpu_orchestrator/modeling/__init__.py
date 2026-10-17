@@ -1,3 +1,4 @@
+from .evaluation import HardwareHoldout, HardwareTransferEvaluation, evaluate_hardware_transfer
 from .linear import fit_metric_model
 from .models import (
     FEATURE_NAMES,
@@ -15,6 +16,8 @@ from .training import DEFAULT_MODEL_METRICS, train_performance_model
 __all__ = [
     "DEFAULT_MODEL_METRICS",
     "FEATURE_NAMES",
+    "HardwareHoldout",
+    "HardwareTransferEvaluation",
     "MODEL_SCHEMA_VERSION",
     "ExperimentRecommendation",
     "MetricPerformanceModel",
@@ -22,6 +25,7 @@ __all__ = [
     "PerformanceModelStore",
     "RecommendationReport",
     "config_feature_vector",
+    "evaluate_hardware_transfer",
     "fit_metric_model",
     "infer_metric_direction",
     "recommend_experiments",
