@@ -1,10 +1,10 @@
+from .evaluation import HardwareHoldout, HardwareTransferEvaluation, evaluate_hardware_transfer
 from .hardware import (
     HARDWARE_FEATURE_NAMES,
     HardwareFeatures,
     HardwareOODReport,
     assess_hardware_ood,
 )
-from .evaluation import HardwareHoldout, HardwareTransferEvaluation, evaluate_hardware_transfer
 from .linear import fit_metric_model
 from .models import (
     FEATURE_NAMES,
