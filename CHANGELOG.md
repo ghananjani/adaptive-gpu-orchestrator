@@ -2,6 +2,13 @@
 
 ## Unreleased — v1.7 cross-hardware research foundations
 
+- read-only saved campaign to paired cross-platform model comparison integration
+- strict workload and benchmark protocol tags and GPU-count consistency checks
+- explicit software provenance match guard with audited override
+- failed/nonfinite trial exclusions and stable included-evidence SHA-256 digest
+- deterministic JSON and per-fold CSV research exports
+- no-GPU integration fixtures and documented research limitations
+
 - paired config-only versus conditioned ridge holdout evaluation with identical platform splits
 - per-platform and pooled RMSE/MAE with signed relative RMSE change
 - research-only OOD bypass explicitly limited to held-out evaluation

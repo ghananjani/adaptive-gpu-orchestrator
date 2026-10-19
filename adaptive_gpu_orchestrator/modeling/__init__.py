@@ -1,3 +1,9 @@
+from .campaign_evidence import (
+    REQUIRED_TAGS,
+    CampaignEvidenceComparison,
+    compare_saved_campaigns,
+    write_campaign_comparison,
+)
 from .comparison import (
     LabeledHardwareTrial,
     PairedHardwareEvaluation,
@@ -35,6 +41,8 @@ __all__ = [
     "FEATURE_NAMES",
     "HARDWARE_FEATURE_NAMES",
     "MODEL_SCHEMA_VERSION",
+    "REQUIRED_TAGS",
+    "CampaignEvidenceComparison",
     "ConditionedRidgeModel",
     "ExperimentRecommendation",
     "HardwareFeatures",
@@ -51,6 +59,7 @@ __all__ = [
     "RecommendationReport",
     "assess_hardware_ood",
     "compare_hardware_heldout_models",
+    "compare_saved_campaigns",
     "config_feature_vector",
     "evaluate_hardware_transfer",
     "fit_hardware_conditioned_model",
@@ -58,4 +67,5 @@ __all__ = [
     "infer_metric_direction",
     "recommend_experiments",
     "train_performance_model",
+    "write_campaign_comparison",
 ]
