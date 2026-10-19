@@ -1,3 +1,8 @@
+from .conditioned import (
+    ConditionedRidgeModel,
+    HardwareTrainingSample,
+    fit_hardware_conditioned_model,
+)
 from .evaluation import HardwareHoldout, HardwareTransferEvaluation, evaluate_hardware_transfer
 from .hardware import (
     HARDWARE_FEATURE_NAMES,
@@ -24,10 +29,12 @@ __all__ = [
     "FEATURE_NAMES",
     "HARDWARE_FEATURE_NAMES",
     "MODEL_SCHEMA_VERSION",
+    "ConditionedRidgeModel",
     "ExperimentRecommendation",
     "HardwareFeatures",
     "HardwareHoldout",
     "HardwareOODReport",
+    "HardwareTrainingSample",
     "HardwareTransferEvaluation",
     "MetricPerformanceModel",
     "PerformanceModelReport",
@@ -36,6 +43,7 @@ __all__ = [
     "assess_hardware_ood",
     "config_feature_vector",
     "evaluate_hardware_transfer",
+    "fit_hardware_conditioned_model",
     "fit_metric_model",
     "infer_metric_direction",
     "recommend_experiments",
