@@ -2,6 +2,11 @@
 
 ## Unreleased — v1.7 cross-hardware research foundations
 
+- opt-in hardware-conditioned log-linear ridge prototype with explicit feature schema
+- OOD guard blocks unmeasured hardware unless explicitly overridden
+- separate serializable conditioned model, leaving legacy v1.6 schemas intact
+- deterministic no-GPU tests and research limitations documentation
+
 - explicit user-supplied measured hardware feature descriptors
 - conservative log-feature out-of-distribution diagnostic and range guard
 - new deterministic input-validation and OOD tests
