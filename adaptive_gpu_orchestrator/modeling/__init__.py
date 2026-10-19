@@ -1,3 +1,9 @@
+from .comparison import (
+    LabeledHardwareTrial,
+    PairedHardwareEvaluation,
+    PairedHardwareFold,
+    compare_hardware_heldout_models,
+)
 from .conditioned import (
     ConditionedRidgeModel,
     HardwareTrainingSample,
@@ -36,11 +42,15 @@ __all__ = [
     "HardwareOODReport",
     "HardwareTrainingSample",
     "HardwareTransferEvaluation",
+    "LabeledHardwareTrial",
     "MetricPerformanceModel",
+    "PairedHardwareEvaluation",
+    "PairedHardwareFold",
     "PerformanceModelReport",
     "PerformanceModelStore",
     "RecommendationReport",
     "assess_hardware_ood",
+    "compare_hardware_heldout_models",
     "config_feature_vector",
     "evaluate_hardware_transfer",
     "fit_hardware_conditioned_model",
