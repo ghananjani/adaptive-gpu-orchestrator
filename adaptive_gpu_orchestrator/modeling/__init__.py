@@ -25,11 +25,11 @@ from .store import PerformanceModelStore
 from .training import DEFAULT_MODEL_METRICS, train_performance_model
 
 __all__ = [
-    "ConditionedRidgeModel",
     "DEFAULT_MODEL_METRICS",
     "FEATURE_NAMES",
     "HARDWARE_FEATURE_NAMES",
     "MODEL_SCHEMA_VERSION",
+    "ConditionedRidgeModel",
     "ExperimentRecommendation",
     "HardwareFeatures",
     "HardwareHoldout",
