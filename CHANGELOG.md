@@ -2,6 +2,11 @@
 
 ## Unreleased — v1.7 cross-hardware research foundations
 
+- paired config-only versus conditioned ridge holdout evaluation with identical platform splits
+- per-platform and pooled RMSE/MAE with signed relative RMSE change
+- research-only OOD bypass explicitly limited to held-out evaluation
+- deterministic synthetic no-GPU tests and evaluation protocol documentation
+
 - opt-in hardware-conditioned log-linear ridge prototype with explicit feature schema
 - OOD guard blocks unmeasured hardware unless explicitly overridden
 - separate serializable conditioned model, leaving legacy v1.6 schemas intact
