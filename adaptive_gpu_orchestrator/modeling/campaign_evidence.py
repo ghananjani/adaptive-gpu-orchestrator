@@ -13,7 +13,11 @@ from typing import Any
 from adaptive_gpu_orchestrator.campaigns import CampaignReport, campaign_trial_rows
 from adaptive_gpu_orchestrator.optimizer import OptimizationStore, ParallelismConfig
 
-from .comparison import LabeledHardwareTrial, PairedHardwareEvaluation, compare_hardware_heldout_models
+from .comparison import (
+    LabeledHardwareTrial,
+    PairedHardwareEvaluation,
+    compare_hardware_heldout_models,
+)
 from .hardware import HardwareFeatures
 
 # Explicit equality prevents silently comparing different model, prompt, dtype,
@@ -82,7 +86,7 @@ def compare_saved_campaigns(
     Hardware descriptors must be independently measured, keyed by exact GPU
     model signature as emitted in the saved trial exports.
     """
-    selected = sorted(list(campaigns), key=lambda campaign: campaign.id)
+    selected = sorted(campaigns, key=lambda campaign: campaign.id)
     if not selected or len({c.id for c in selected}) != len(selected):
         raise ValueError("campaigns must be nonempty and have unique IDs")
     expected: dict[str, str] | None = None
