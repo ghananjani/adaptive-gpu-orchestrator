@@ -15,6 +15,7 @@ from .conditioned import (
     HardwareTrainingSample,
     fit_hardware_conditioned_model,
 )
+from .design_audit import CampaignDesignAudit, audit_campaign_design
 from .evaluation import HardwareHoldout, HardwareTransferEvaluation, evaluate_hardware_transfer
 from .hardware import (
     HARDWARE_FEATURE_NAMES,
@@ -42,6 +43,7 @@ __all__ = [
     "HARDWARE_FEATURE_NAMES",
     "MODEL_SCHEMA_VERSION",
     "REQUIRED_TAGS",
+    "CampaignDesignAudit",
     "CampaignEvidenceComparison",
     "ConditionedRidgeModel",
     "ExperimentRecommendation",
@@ -58,6 +60,7 @@ __all__ = [
     "PerformanceModelStore",
     "RecommendationReport",
     "assess_hardware_ood",
+    "audit_campaign_design",
     "compare_hardware_heldout_models",
     "compare_saved_campaigns",
     "config_feature_vector",
