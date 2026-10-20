@@ -2,6 +2,10 @@
 
 ## Unreleased — v1.7 cross-hardware research foundations
 
+- read-only campaign-design audit for platform-campaign confounding, replicate coverage,
+  reused optimization IDs and missing software provenance
+- deterministic no-GPU design-audit unit tests and research documentation
+
 - read-only saved campaign to paired cross-platform model comparison integration
 - strict workload and benchmark protocol tags and GPU-count consistency checks
 - explicit software provenance match guard with audited override
