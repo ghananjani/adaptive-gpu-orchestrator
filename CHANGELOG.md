@@ -2,6 +2,11 @@
 
 ## Unreleased — v1.7 cross-hardware research foundations
 
+- seeded platform-stratified campaign cluster bootstrap for fixed paired held-out residuals
+- percentage pooled RMSE reduction with percentile interval and explicit zero-baseline behavior
+- enforce at least two campaign clusters per platform; do not treat individual requests as independent
+- deterministic no-GPU tests and honest inference-limit documentation
+
 - read-only campaign-design audit for platform-campaign confounding, replicate coverage,
   reused optimization IDs and missing software provenance
 - deterministic no-GPU design-audit unit tests and research documentation
