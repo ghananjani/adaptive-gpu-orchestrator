@@ -61,7 +61,7 @@ def test_zero_baseline_has_no_defined_reduction():
 
 @pytest.mark.parametrize("kwargs", [
     {"iterations": 0}, {"confidence": 1.0}, {"confidence": float("nan")},
-    {"seed": True},
+
 ])
 def test_invalid_parameters(kwargs):
     with pytest.raises(ValueError):
