@@ -1,3 +1,8 @@
+from .bootstrap import (
+    CampaignBootstrapReport,
+    CampaignPairedResidual,
+    bootstrap_campaign_rmse_reduction,
+)
 from .campaign_evidence import (
     REQUIRED_TAGS,
     CampaignEvidenceComparison,
@@ -43,8 +48,10 @@ __all__ = [
     "HARDWARE_FEATURE_NAMES",
     "MODEL_SCHEMA_VERSION",
     "REQUIRED_TAGS",
+    "CampaignBootstrapReport",
     "CampaignDesignAudit",
     "CampaignEvidenceComparison",
+    "CampaignPairedResidual",
     "ConditionedRidgeModel",
     "ExperimentRecommendation",
     "HardwareFeatures",
@@ -61,6 +68,7 @@ __all__ = [
     "RecommendationReport",
     "assess_hardware_ood",
     "audit_campaign_design",
+    "bootstrap_campaign_rmse_reduction",
     "compare_hardware_heldout_models",
     "compare_saved_campaigns",
     "config_feature_vector",
