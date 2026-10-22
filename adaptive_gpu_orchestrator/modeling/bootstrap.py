@@ -95,7 +95,7 @@ def bootstrap_campaign_rmse_reduction(
     if not math.isfinite(confidence) or not 0 < confidence < 1:
         raise ValueError("confidence must lie strictly between 0 and 1")
     if isinstance(seed, bool) or not isinstance(seed, int):
-        raise ValueError("seed must be an integer")
+        raise TypeError("seed must be an integer")
     grouped: dict[str, dict[str, list[CampaignPairedResidual]]] = defaultdict(
         lambda: defaultdict(list)
     )
