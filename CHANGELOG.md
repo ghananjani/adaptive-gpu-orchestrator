@@ -2,6 +2,11 @@
 
 ## Unreleased — v1.7 cross-hardware research foundations
 
+- validated saved-campaign adapter for leave-platform-out refitting bootstrap
+- mandatory campaign-design audit and shared optimization-evidence protection
+- independent campaign replication requirement and point-estimate consistency gate
+- reproducible combined JSON export, no-GPU integration tests, research protocol docs
+
 - experimental campaign-stratified, leave-hardware-out refitting bootstrap
 - deterministic train-only campaign resampling, paired RMSE reduction intervals
 - strict platform and campaign identity checks with non-deployment safeguards
