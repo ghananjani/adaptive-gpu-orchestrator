@@ -10,7 +10,11 @@ from typing import Any
 from adaptive_gpu_orchestrator.campaigns import CampaignReport, campaign_trial_rows
 from adaptive_gpu_orchestrator.optimizer import OptimizationStore, ParallelismConfig
 
-from .bootstrap import CampaignBootstrapReport, CampaignPairedResidual, bootstrap_campaign_rmse_reduction
+from .bootstrap import (
+    CampaignBootstrapReport,
+    CampaignPairedResidual,
+    bootstrap_campaign_rmse_reduction,
+)
 from .campaign_evidence import CampaignEvidenceComparison, compare_saved_campaigns
 from .conditioned import HardwareTrainingSample, fit_hardware_conditioned_model
 from .hardware import HardwareFeatures
