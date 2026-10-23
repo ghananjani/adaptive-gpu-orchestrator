@@ -40,6 +40,11 @@ from .models import (
 )
 from .recommend import infer_metric_direction, recommend_experiments
 from .refitting import CampaignHardwareTrial, RefittingBootstrapReport, refit_campaign_bootstrap
+from .saved_refitting import (
+    SavedRefittingEvaluation,
+    evaluate_saved_refitting,
+    write_saved_refitting_report,
+)
 from .saved_uncertainty import SavedCampaignUncertainty, evaluate_saved_campaign_uncertainty
 from .store import PerformanceModelStore
 from .training import DEFAULT_MODEL_METRICS, train_performance_model
@@ -71,6 +76,7 @@ __all__ = [
     "RecommendationReport",
     "RefittingBootstrapReport",
     "SavedCampaignUncertainty",
+    "SavedRefittingEvaluation",
     "assess_hardware_ood",
     "audit_campaign_design",
     "bootstrap_campaign_rmse_reduction",
@@ -79,6 +85,7 @@ __all__ = [
     "config_feature_vector",
     "evaluate_hardware_transfer",
     "evaluate_saved_campaign_uncertainty",
+    "evaluate_saved_refitting",
     "fit_hardware_conditioned_model",
     "fit_metric_model",
     "infer_metric_direction",
@@ -86,4 +93,5 @@ __all__ = [
     "refit_campaign_bootstrap",
     "train_performance_model",
     "write_campaign_comparison",
+    "write_saved_refitting_report",
 ]
