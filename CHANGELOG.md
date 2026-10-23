@@ -2,6 +2,10 @@
 
 ## Unreleased — v1.7 cross-hardware research foundations
 
+- direct saved-campaign to paired held-out residual and campaign-bootstrap pipeline
+- per-platform RMSE consistency verification against the original comparison
+- deterministic integration tests, provenance guards and clear research-only caveats
+
 - seeded platform-stratified campaign cluster bootstrap for fixed paired held-out residuals
 - percentage pooled RMSE reduction with percentile interval and explicit zero-baseline behavior
 - enforce at least two campaign clusters per platform; do not treat individual requests as independent

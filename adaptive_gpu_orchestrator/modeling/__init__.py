@@ -39,6 +39,7 @@ from .models import (
     config_feature_vector,
 )
 from .recommend import infer_metric_direction, recommend_experiments
+from .saved_uncertainty import SavedCampaignUncertainty, evaluate_saved_campaign_uncertainty
 from .store import PerformanceModelStore
 from .training import DEFAULT_MODEL_METRICS, train_performance_model
 
@@ -66,6 +67,7 @@ __all__ = [
     "PerformanceModelReport",
     "PerformanceModelStore",
     "RecommendationReport",
+    "SavedCampaignUncertainty",
     "assess_hardware_ood",
     "audit_campaign_design",
     "bootstrap_campaign_rmse_reduction",
@@ -73,6 +75,7 @@ __all__ = [
     "compare_saved_campaigns",
     "config_feature_vector",
     "evaluate_hardware_transfer",
+    "evaluate_saved_campaign_uncertainty",
     "fit_hardware_conditioned_model",
     "fit_metric_model",
     "infer_metric_direction",
