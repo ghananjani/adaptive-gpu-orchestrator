@@ -2,6 +2,11 @@
 
 ## Unreleased — v1.7 cross-hardware research foundations
 
+- experimental campaign-stratified, leave-hardware-out refitting bootstrap
+- deterministic train-only campaign resampling, paired RMSE reduction intervals
+- strict platform and campaign identity checks with non-deployment safeguards
+- no-GPU tests and explicit conditional-inference limitations
+
 - direct saved-campaign to paired held-out residual and campaign-bootstrap pipeline
 - per-platform RMSE consistency verification against the original comparison
 - deterministic integration tests, provenance guards and clear research-only caveats
