@@ -47,10 +47,10 @@ def fixtures(monkeypatch):
 
 def test_end_to_end_reproducible_export(monkeypatch, tmp_path):
     campaigns, _, hardware = fixtures(monkeypatch)
-    kwargs = dict(
-        optimization_store=object(), measured_hardware=hardware,
-        iterations=20, seed=23,
-    )
+    kwargs = {
+        "optimization_store": object(), "measured_hardware": hardware,
+        "iterations": 20, "seed": 23,
+    }
     a = saved_refitting.evaluate_saved_refitting(campaigns, **kwargs)
     b = saved_refitting.evaluate_saved_refitting(reversed(campaigns), **kwargs)
     assert a.to_dict() == b.to_dict()
