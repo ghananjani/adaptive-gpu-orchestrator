@@ -38,6 +38,7 @@ from .models import (
     RecommendationReport,
     config_feature_vector,
 )
+from .refitting import CampaignHardwareTrial, RefittingBootstrapReport, refit_campaign_bootstrap
 from .recommend import infer_metric_direction, recommend_experiments
 from .saved_uncertainty import SavedCampaignUncertainty, evaluate_saved_campaign_uncertainty
 from .store import PerformanceModelStore
@@ -52,6 +53,7 @@ __all__ = [
     "CampaignBootstrapReport",
     "CampaignDesignAudit",
     "CampaignEvidenceComparison",
+    "CampaignHardwareTrial",
     "CampaignPairedResidual",
     "ConditionedRidgeModel",
     "ExperimentRecommendation",
@@ -67,6 +69,7 @@ __all__ = [
     "PerformanceModelReport",
     "PerformanceModelStore",
     "RecommendationReport",
+    "RefittingBootstrapReport",
     "SavedCampaignUncertainty",
     "assess_hardware_ood",
     "audit_campaign_design",
@@ -80,6 +83,7 @@ __all__ = [
     "fit_metric_model",
     "infer_metric_direction",
     "recommend_experiments",
+    "refit_campaign_bootstrap",
     "train_performance_model",
     "write_campaign_comparison",
 ]
