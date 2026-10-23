@@ -38,8 +38,8 @@ from .models import (
     RecommendationReport,
     config_feature_vector,
 )
-from .refitting import CampaignHardwareTrial, RefittingBootstrapReport, refit_campaign_bootstrap
 from .recommend import infer_metric_direction, recommend_experiments
+from .refitting import CampaignHardwareTrial, RefittingBootstrapReport, refit_campaign_bootstrap
 from .saved_uncertainty import SavedCampaignUncertainty, evaluate_saved_campaign_uncertainty
 from .store import PerformanceModelStore
 from .training import DEFAULT_MODEL_METRICS, train_performance_model
