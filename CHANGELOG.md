@@ -2,6 +2,10 @@
 
 ## Unreleased — v1.7 cross-hardware research foundations
 
+- new `ago-research-report` read-only entrypoint to load saved campaigns and measured hardware JSON
+- one-command validation, refitting and offline research bundle with explicit errors and no GPU execution
+- CLI parsing and failure-mode tests and user documentation
+
 - deterministic publication-oriented offline JSON/Markdown/HTML/fold-CSV reporting
 - workload, campaign audit, held-out errors and refitting sensitivity in one provenance-preserving bundle
 - SHA-256 JSON checksum and HTML escaping tests; no GPU workloads or remote assets
