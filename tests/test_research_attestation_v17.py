@@ -6,6 +6,7 @@ import pytest
 cryptography = pytest.importorskip("cryptography")
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from test_research_disk_e2e_v17 import build_saved_experiments
 
 from adaptive_gpu_orchestrator.research_attestation import (
     sign_research_report,
@@ -14,7 +15,6 @@ from adaptive_gpu_orchestrator.research_attestation import (
 from adaptive_gpu_orchestrator.research_cli import main as generate
 from adaptive_gpu_orchestrator.research_sign_cli import main as sign_cli
 from adaptive_gpu_orchestrator.research_verify import main as verify_cli
-from test_research_disk_e2e_v17 import build_saved_experiments
 
 
 def keys(tmp_path):
