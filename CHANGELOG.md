@@ -2,6 +2,10 @@
 
 ## Unreleased — v1.7 cross-hardware research foundations
 
+- independent `ago-research-verify` command cross-checks saved campaign and optimization fingerprints against reports
+- optional complete JSON checksum verification and disk-backed tamper-detection tests
+- no GPU execution; provenance authenticity remains out of scope
+
 - new `ago-research-report` read-only entrypoint to load saved campaigns and measured hardware JSON
 - one-command validation, refitting and offline research bundle with explicit errors and no GPU execution
 - CLI parsing and failure-mode tests and user documentation
