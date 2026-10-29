@@ -30,8 +30,10 @@ def verify_report(
     if not isinstance(report, dict) or report.get("kind") != "gpu-hardware-research-report":
         raise ValueError("invalid research report kind")
     manifest = report.get("evidence_manifest")
-    if not isinstance(manifest, dict):
+    if manifest is None:
         raise ValueError("report lacks source evidence manifest")
+    if not isinstance(manifest, dict):
+        raise TypeError("source evidence manifest must be an object")
     if manifest.get("schema_version") != 1 or manifest.get("hash_algorithm") != "sha256":
         raise ValueError("unsupported source evidence manifest")
     sources = manifest.get("sources")
