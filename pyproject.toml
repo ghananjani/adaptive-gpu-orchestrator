@@ -28,6 +28,7 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
 nvml = ["nvidia-ml-py>=12"]
+attestation = ["cryptography>=42"]
 
 [project.scripts]
 agoctl = "adaptive_gpu_orchestrator.cli:main"
