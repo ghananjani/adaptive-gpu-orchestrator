@@ -31,6 +31,7 @@ nvml = ["nvidia-ml-py>=12"]
 
 [project.scripts]
 agoctl = "adaptive_gpu_orchestrator.cli:main"
+ago-research-report = "adaptive_gpu_orchestrator.research_cli:main"
 
 [tool.setuptools.packages.find]
 include = ["adaptive_gpu_orchestrator*"]
