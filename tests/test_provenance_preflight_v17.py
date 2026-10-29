@@ -1,6 +1,5 @@
 """Regression guards for the strict saved research report metadata preflight."""
 import pytest
-
 from test_saved_refitting_v17 import fixtures
 
 from adaptive_gpu_orchestrator.modeling import saved_refitting
