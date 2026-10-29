@@ -11,10 +11,10 @@ from adaptive_gpu_orchestrator.research_attestation import (
     sign_research_report,
     verify_research_signature,
 )
+from adaptive_gpu_orchestrator.research_cli import main as generate
 from adaptive_gpu_orchestrator.research_sign_cli import main as sign_cli
 from adaptive_gpu_orchestrator.research_verify import main as verify_cli
 from test_research_disk_e2e_v17 import build_saved_experiments
-from adaptive_gpu_orchestrator.research_cli import main as generate
 
 
 def keys(tmp_path):
@@ -46,7 +46,6 @@ def test_signature_roundtrip_wrong_key_and_tampering(tmp_path):
         verify_research_signature(
             report, signature, public_path, expected_key_id="another-key"
         )
-    _, other_public = keys(tmp_path / "other") if False else (None, None)
     wrong_key = Ed25519PrivateKey.generate().public_key()
     public_path.write_bytes(wrong_key.public_bytes(
         serialization.Encoding.PEM, serialization.PublicFormat.SubjectPublicKeyInfo,
