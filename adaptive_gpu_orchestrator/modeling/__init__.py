@@ -40,6 +40,12 @@ from .models import (
 )
 from .recommend import infer_metric_direction, recommend_experiments
 from .refitting import CampaignHardwareTrial, RefittingBootstrapReport, refit_campaign_bootstrap
+from .research_report import (
+    render_research_html,
+    render_research_markdown,
+    research_report_payload,
+    write_research_report,
+)
 from .saved_refitting import (
     SavedRefittingEvaluation,
     evaluate_saved_refitting,
@@ -91,7 +97,11 @@ __all__ = [
     "infer_metric_direction",
     "recommend_experiments",
     "refit_campaign_bootstrap",
+    "render_research_html",
+    "render_research_markdown",
+    "research_report_payload",
     "train_performance_model",
     "write_campaign_comparison",
+    "write_research_report",
     "write_saved_refitting_report",
 ]
