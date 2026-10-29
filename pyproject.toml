@@ -26,7 +26,7 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "cryptography>=42"]
 nvml = ["nvidia-ml-py>=12"]
 attestation = ["cryptography>=42"]
 
