@@ -36,14 +36,19 @@ def test_cli_deterministic_read_only_wiring(monkeypatch, tmp_path, capsys):
         called.append((tuple(c.id for c in campaigns), kwargs))
         return "validated"
 
-    def export(result, output_dir):
+    def export(result, output_dir, *, evidence_manifest):
         assert result == "validated"
+        assert evidence_manifest["manifest_sha256"] == "fixture"
         assert output_dir == tmp_path / "out"
         return {"html": output_dir / "research-report.html"}
 
     monkeypatch.setattr(research_cli.CampaignStore, "load", load)
     monkeypatch.setattr(research_cli, "evaluate_saved_refitting", evaluate)
     monkeypatch.setattr(research_cli, "write_research_report", export)
+    monkeypatch.setattr(
+        research_cli, "fingerprint_saved_evidence",
+        lambda campaigns, *, optimization_store: {"manifest_sha256": "fixture"},
+    )
     args = [
         "A-0", "A-1", "B-0", "B-1", "C-0", "C-1",
         "--hardware-json", str(hardware_file),

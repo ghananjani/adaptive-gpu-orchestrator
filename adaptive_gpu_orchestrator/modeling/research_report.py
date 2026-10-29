@@ -162,11 +162,18 @@ Valid bootstrap draws: {s['valid_iterations']}/{s['requested_iterations']}</p>
 """
 
 
-def write_research_report(result: SavedRefittingEvaluation, output_dir: str | Path) -> dict[str, Path]:
+def write_research_report(
+    result: SavedRefittingEvaluation,
+    output_dir: str | Path,
+    *,
+    evidence_manifest: dict[str, Any] | None = None,
+) -> dict[str, Path]:
     """Write deterministic JSON, Markdown, HTML and fold CSV offline."""
     output = Path(output_dir)
     output.mkdir(parents=True, exist_ok=True)
     payload = research_report_payload(result)
+    if evidence_manifest is not None:
+        payload["evidence_manifest"] = evidence_manifest
     canonical = json.dumps(payload, sort_keys=True, indent=2, allow_nan=False) + "\n"
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     paths = {
