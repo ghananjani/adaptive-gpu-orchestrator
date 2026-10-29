@@ -7,12 +7,12 @@ import sys
 from pathlib import Path
 
 from adaptive_gpu_orchestrator.campaigns import CampaignStore
-from adaptive_gpu_orchestrator.modeling.evidence_fingerprint import fingerprint_saved_evidence
 from adaptive_gpu_orchestrator.modeling import (
     HardwareFeatures,
     evaluate_saved_refitting,
     write_research_report,
 )
+from adaptive_gpu_orchestrator.modeling.evidence_fingerprint import fingerprint_saved_evidence
 from adaptive_gpu_orchestrator.optimizer import OptimizationStore
 
 
