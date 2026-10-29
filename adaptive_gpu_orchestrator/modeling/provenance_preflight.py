@@ -46,7 +46,10 @@ def validate_research_provenance(
                 raise ValueError(f"campaign {campaign.id} missing optimization ID")
             owner = seen_optimizations.setdefault(optimization, campaign.id)
             if owner != campaign.id:
-                raise ValueError(f"optimization ID {optimization} reused by campaigns {owner} and {campaign.id}")
+                raise ValueError(
+                    f"shared optimization ID {optimization} reused by campaigns "
+                    f"{owner} and {campaign.id}"
+                )
             identity = (
                 str(row.get("replicate") or "").strip(),
                 optimization,
