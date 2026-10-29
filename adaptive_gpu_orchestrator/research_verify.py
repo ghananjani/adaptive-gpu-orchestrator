@@ -76,6 +76,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("report", type=Path, help="Existing research-report.json")
     parser.add_argument("--campaign-store", default=".ago/campaigns")
     parser.add_argument("--optimization-store", default=".ago/optimizations")
+    parser.add_argument("--signature", type=Path, help="Optional detached Ed25519 signature")
+    parser.add_argument("--public-key", type=Path, help="Trusted PEM Ed25519 public key")
+    parser.add_argument("--expected-key-id", help="Expected independently trusted signer key ID")
     parser.add_argument("--checksum", type=Path,
                         help="Optional explicit research-report.sha256")
     return parser
@@ -84,13 +87,26 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
+        if (args.signature is None) != (args.public_key is None):
+            raise ValueError("--signature and --public-key must be specified together")
+        if args.expected_key_id is not None and args.signature is None:
+            raise ValueError("--expected-key-id requires --signature")
         result = verify_report(
             args.report,
             campaign_store=CampaignStore(Path(args.campaign_store)),
             optimization_store=OptimizationStore(Path(args.optimization_store)),
             checksum_path=args.checksum,
         )
-    except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
+        if args.signature is not None:
+            from adaptive_gpu_orchestrator.research_attestation import (
+                verify_research_signature,
+            )
+
+            result["signature"] = verify_research_signature(
+                args.report, args.signature, args.public_key,
+                expected_key_id=args.expected_key_id,
+            )
+    except (OSError, ValueError, TypeError, KeyError, ImportError, json.JSONDecodeError) as exc:
         print(f"research verification failed: {exc}", file=sys.stderr)
         return 2
     print(json.dumps(result, sort_keys=True, indent=2))

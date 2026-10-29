@@ -26,13 +26,15 @@ classifiers = [
 dependencies = []
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11"]
+dev = ["pytest>=8", "ruff>=0.6", "mypy>=1.11", "cryptography>=42"]
 nvml = ["nvidia-ml-py>=12"]
+attestation = ["cryptography>=42"]
 
 [project.scripts]
 agoctl = "adaptive_gpu_orchestrator.cli:main"
 ago-research-report = "adaptive_gpu_orchestrator.research_cli:main"
 ago-research-verify = "adaptive_gpu_orchestrator.research_verify:main"
+ago-research-sign = "adaptive_gpu_orchestrator.research_sign_cli:main"
 
 [tool.setuptools.packages.find]
 include = ["adaptive_gpu_orchestrator*"]
