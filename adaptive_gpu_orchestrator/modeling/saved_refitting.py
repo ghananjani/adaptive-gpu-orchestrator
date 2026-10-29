@@ -14,6 +14,7 @@ from adaptive_gpu_orchestrator.optimizer import OptimizationStore, ParallelismCo
 from .campaign_evidence import CampaignEvidenceComparison, compare_saved_campaigns
 from .design_audit import CampaignDesignAudit, audit_campaign_design
 from .hardware import HardwareFeatures
+from .provenance_preflight import validate_research_provenance
 from .refitting import (
     CampaignHardwareTrial,
     RefittingBootstrapReport,
@@ -55,6 +56,11 @@ def evaluate_saved_refitting(
     executed, and out-of-distribution bypass remains evaluation-only.
     """
     selected = sorted(campaigns, key=lambda campaign: campaign.id)
+    validate_research_provenance(
+        selected,
+        optimization_store=optimization_store,
+        measured_hardware=measured_hardware,
+    )
     comparison = compare_saved_campaigns(
         selected,
         optimization_store=optimization_store,

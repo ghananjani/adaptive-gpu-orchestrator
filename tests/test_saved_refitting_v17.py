@@ -42,6 +42,8 @@ def fixtures(monkeypatch):
     monkeypatch.setattr(saved_refitting, "campaign_trial_rows", getter)
     monkeypatch.setattr(campaign_evidence, "campaign_trial_rows", getter)
     monkeypatch.setattr(design_audit, "campaign_trial_rows", getter)
+    from adaptive_gpu_orchestrator.modeling import provenance_preflight
+    monkeypatch.setattr(provenance_preflight, "campaign_trial_rows", getter)
     return campaigns, rows, hardware
 
 
