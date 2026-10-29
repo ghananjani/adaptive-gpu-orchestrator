@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 from adaptive_gpu_orchestrator.campaigns import CampaignStore
+from adaptive_gpu_orchestrator.modeling.evidence_fingerprint import fingerprint_saved_evidence
 from adaptive_gpu_orchestrator.modeling import (
     HardwareFeatures,
     evaluate_saved_refitting,
@@ -50,9 +51,10 @@ def main(argv: list[str] | None = None) -> int:
         }
         store = CampaignStore(Path(args.campaign_store))
         campaigns = [store.load(identifier) for identifier in args.campaign_ids]
+        optimization_store = OptimizationStore(Path(args.optimization_store))
         result = evaluate_saved_refitting(
             campaigns,
-            optimization_store=OptimizationStore(Path(args.optimization_store)),
+            optimization_store=optimization_store,
             measured_hardware=hardware,
             metric=args.metric,
             ridge_lambda=args.ridge_lambda,
@@ -61,7 +63,10 @@ def main(argv: list[str] | None = None) -> int:
             seed=args.seed,
             allow_software_mismatch=args.allow_software_mismatch,
         )
-        paths = write_research_report(result, args.output_dir)
+        manifest = fingerprint_saved_evidence(
+            campaigns, optimization_store=optimization_store
+        )
+        paths = write_research_report(result, args.output_dir, evidence_manifest=manifest)
     except (OSError, ValueError, TypeError, KeyError, json.JSONDecodeError) as exc:
         print(f"research report failed: {exc}", file=sys.stderr)
         return 2
