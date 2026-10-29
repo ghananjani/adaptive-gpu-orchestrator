@@ -78,8 +78,9 @@ def render_research_markdown(payload: dict[str, Any]) -> str:
         "|---|---:|---:|---:|---:|---:|",
     ]
     for fold in fold_rows:
+        platform_label = str(fold["held_out_platform"]).replace("|", "&#124;").replace("\\n", " ")
         lines.append(
-            f"| {str(fold['held_out_platform']).replace('|', '\\|')} | {fold['train_samples']} | "
+            f"| {platform_label} | {fold['train_samples']} | "
             f"{fold['test_samples']} | {_fmt(fold['config_rmse'])} | "
             f"{_fmt(fold['conditioned_rmse'])} | {_fmt(fold['rmse_reduction_pct'])} |"
         )
