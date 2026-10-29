@@ -2,6 +2,10 @@
 
 ## Unreleased — v1.7 cross-hardware research foundations
 
+- deterministic publication-oriented offline JSON/Markdown/HTML/fold-CSV reporting
+- workload, campaign audit, held-out errors and refitting sensitivity in one provenance-preserving bundle
+- SHA-256 JSON checksum and HTML escaping tests; no GPU workloads or remote assets
+
 - validated saved-campaign adapter for leave-platform-out refitting bootstrap
 - mandatory campaign-design audit and shared optimization-evidence protection
 - independent campaign replication requirement and point-estimate consistency gate
