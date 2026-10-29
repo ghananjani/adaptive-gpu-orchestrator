@@ -11,7 +11,7 @@ from typing import Any
 from .saved_refitting import SavedRefittingEvaluation
 
 
-def _fmt(value: float | int | None) -> str:
+def _fmt(value: float | None) -> str:
     if value is None:
         return "N/A"
     return f"{value:.4f}"
