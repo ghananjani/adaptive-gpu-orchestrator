@@ -51,8 +51,10 @@ def create_release_manifest(
         raise ValueError("release requires source evidence manifest")
     if not isinstance(evidence, dict):
         raise TypeError("source evidence manifest must be an object")
-    if not isinstance(evidence.get("manifest_sha256"), str):
+    if evidence.get("manifest_sha256") is None:
         raise ValueError("release requires source evidence manifest digest")
+    if not isinstance(evidence["manifest_sha256"], str):
+        raise TypeError("source evidence manifest digest must be text")
     payload: dict[str, Any] = {
         "schema_version": 1,
         "kind": "research-release-manifest",
