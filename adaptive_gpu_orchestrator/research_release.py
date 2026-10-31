@@ -47,8 +47,12 @@ def create_release_manifest(
     if not isinstance(report, dict) or report.get("kind") != "gpu-hardware-research-report":
         raise ValueError("invalid research report kind")
     evidence = report.get("evidence_manifest")
-    if not isinstance(evidence, dict) or not isinstance(evidence.get("manifest_sha256"), str):
+    if evidence is None:
         raise ValueError("release requires source evidence manifest")
+    if not isinstance(evidence, dict):
+        raise TypeError("source evidence manifest must be an object")
+    if not isinstance(evidence.get("manifest_sha256"), str):
+        raise ValueError("release requires source evidence manifest digest")
     payload: dict[str, Any] = {
         "schema_version": 1,
         "kind": "research-release-manifest",
