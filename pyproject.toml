@@ -35,6 +35,7 @@ agoctl = "adaptive_gpu_orchestrator.cli:main"
 ago-research-report = "adaptive_gpu_orchestrator.research_cli:main"
 ago-research-verify = "adaptive_gpu_orchestrator.research_verify:main"
 ago-research-sign = "adaptive_gpu_orchestrator.research_sign_cli:main"
+ago-research-release = "adaptive_gpu_orchestrator.research_release_cli:main"
 
 [tool.setuptools.packages.find]
 include = ["adaptive_gpu_orchestrator*"]
